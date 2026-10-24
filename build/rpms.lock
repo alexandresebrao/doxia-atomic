@@ -1,0 +1,18 @@
+# DoxIA's own RPM builds (release assets of alexandresebrao/DoxIA) and the
+# upstream ones Fedora doesn't package, pinned by sha256. One per line:
+#   <url> <sha256>
+# The order is the install order: scenefx before mango, which requires it.
+# To ship a new build: upload it as a release asset, then replace its line.
+
+# wlroots with the vmwgfx DMA-BUF fix (only acts on vmwgfx, harmless elsewhere)
+https://github.com/alexandresebrao/DoxIA/releases/download/wlroots-0.20.2-1/wlroots-0.20.2-1.fc44.doxia1.x86_64.rpm cc3730300358c9c1f9be83d260928b3f62519253fc6eeda8e8fc3a20c1cb36cb
+# scenefx with the vmwgfx fallback for the blur/shadow buffers
+https://github.com/alexandresebrao/DoxIA/releases/download/scenefx-0.5-3/scenefx-0.5-3.fc44.doxia2.x86_64.rpm 5185949157abde1442aba5e155befcd3620032e618aad3e83120ffdae12c51b8
+# mango with the no-render-node fix (Hyper-V, llvmpipe)
+https://github.com/alexandresebrao/DoxIA/releases/download/mangowm-0.18.2-1.doxia1/mangowm-0.18.2-1.doxia1.fc44.x86_64.rpm 6cac6b4e1e0c010f633d40620c639891a8fb551b22ae14eeb0eb830e09effcfd
+https://github.com/alexandresebrao/DoxIA/releases/download/uwsm-0.27.1-1.doxia1/uwsm-0.27.1-1.doxia1.fc44.noarch.rpm 606cac753b5c10824c75d2e090573f809993a937afadf0f36090020ed7441f0f
+https://github.com/alexandresebrao/DoxIA/releases/download/gpu-screen-recorder-6.1.5-1.doxia1/gpu-screen-recorder-6.1.5-1.doxia1.fc44.x86_64.rpm 73c605bce3f2b64e7a652451dba55511fffa18a90539fd31c56750d7af0b3d5a
+# DoxMail, the mail, calendar and contacts app
+https://github.com/alexandresebrao/DoxIA/releases/download/doxmail-3.60.2-0.20261022gite6280e278a/doxmail-3.60.2-0.20261022gite6280e278a.fc44.x86_64.rpm 43b0ee79db491710f9026fdf8f317826a9868d94840982622aff4997a25db05f
+# Voxtype dictation (upstream release; Fedora has no package)
+https://github.com/peteonrails/voxtype/releases/download/v1.1.1/voxtype-1.1.1-1.x86_64.rpm 5d0704d2f8bff4b02ca7d6ace1eab20caf8b3bbbc137f3e1a268af5021509872

@@ -1,22 +1,22 @@
 #!/bin/bash
 
 # DoxIA: draws the brand image (∞ DoxIA) instead of the ASCII logo in terminals
-# that show images, keeping the ASCII everywhere else. install-system.sh links it
-# as /usr/local/bin/fastfetch, ahead of /usr/bin. An explicit logo option or a
+# that show images, keeping the ASCII everywhere else. The image moves the real binary to
+# /usr/libexec/doxia and puts this one in its place (build/steps/40-doxia.sh). An explicit logo option or a
 # personal ~/.config/fastfetch config is left alone.
 
-real=/usr/bin/fastfetch
-doxia_path=$(dirname "$(dirname "$(dirname "$(readlink -f "$0")")")")
+real=/usr/libexec/doxia/fastfetch
+doxia_path=/usr/share/doxia
 
 for arg; do
   [[ $arg == @(-l|--logo*|-c|--config) ]] && exec "$real" "$@"
 done
 [[ -f $HOME/.config/fastfetch/config.jsonc ]] && exec "$real" "$@"
 
-if [[ -t 1 ]] && "$doxia_path/fedora/doxia/term-graphics" >/dev/null; then
+if [[ -t 1 ]] && "$doxia_path/lib/term-graphics" >/dev/null; then
   # As wide as the ASCII logo (46 columns), so doxia-launch-about's window fit
   # still holds; the image is about half its height, hence the extra top padding.
-  exec "$real" --logo "$("$doxia_path/fedora/doxia/brand-image")" --logo-type kitty \
+  exec "$real" --logo "$("$doxia_path/lib/brand-image")" --logo-type kitty \
     --logo-width 46 --logo-padding-top 14 "$@"
 fi
 exec "$real" "$@"

@@ -1,13 +1,17 @@
 #!/bin/bash
 
-# doxia:summary=Update DoxIA and system packages
+# doxia:summary=Update DoxIA: the system image, Flatpak apps and mise tools
 # doxia:args=[-y] [--now|--boot|--flatpak] [--gui]
-# doxia:examples=doxia update | doxia update -y | doxia update --now | doxia update --boot
+# doxia:examples=doxia update | doxia update -y | doxia update --now
 # doxia:requires-sudo=true
 
-# --now      install the system packages right away (the original behavior)
-# --boot     download them now and install them on the next reboot (dnf offline)
-# --flatpak  only the Flatpak apps: no password, no reboot
+# The system is an image (bootc): an update downloads the new one and stages
+# it, and it boots on the next restart. The running system never changes
+# under the open apps, and the previous image stays in the boot menu.
+#
+# --boot     stage the new image; it starts on the next restart (default)
+# --now      stage it and restart right away
+# --flatpak  only the Flatpak apps: no password, no restart
 # Without one, the "mode" preference decides (doxia-update-pref, set in the
 # Atualizar DoxIA window). --gui is how that window runs it (doxia-update-run):
 # no prompts, the password comes through doxia-update-askpass, and each step
@@ -15,9 +19,8 @@
 
 set -eE
 
-# Lowest CPU and disk priority, inherited by everything the update starts (dnf
-# and its scriptlets through sudo too): with only a few cores, the upgrade
-# would otherwise starve the compositor and leave the desktop unusable.
+# Lowest CPU and disk priority, inherited by everything the update starts:
+# unpacking the image layers would otherwise starve the compositor.
 renice -n 19 -p $$ >/dev/null 2>&1 || true
 ionice -c 2 -n 7 -p $$ >/dev/null 2>&1 || true
 
@@ -43,11 +46,6 @@ for arg in "$@"; do
   esac
 done
 [[ -n $mode ]] || mode=$(doxia-update-pref get mode)
-[[ $mode == "boot" ]] && ! doxia-cmd-present dnf5 && mode=now
-
-autoremove=$(doxia-update-pref get autoremoveOrphans)
-snapshot=$(doxia-update-pref get snapshot)
-doxia-cmd-present snapper || snapshot=false
 
 state() { (( gui )) && doxia-update-state "$@"; true; }
 
@@ -60,11 +58,9 @@ run_step() {
   state step "$current_step" done
 }
 
-skip_step() { state step "$1" skip "${2:-}"; }
-
 finish_failed() {
   echo ""
-  echo -e "\033[0;31mSomething went wrong during the update!\n\nPlease review the output above carefully, correct the error, and retry the update.\n\nIf you need assistance, get help from the community at https://doxia.org/discord\033[0m"
+  echo -e "\033[0;31mSomething went wrong during the update!\n\nPlease review the output above carefully, correct the error, and retry the update.\033[0m"
   state step "$current_step" fail
   state finish failed "$current_step"
 }
@@ -78,182 +74,81 @@ trap 'state finish canceled; exit 130' TERM INT
 (( assume_yes )) && export DOXIA_UPDATE_UNATTENDED=1
 (( gui )) && export DOXIA_UPDATE_GUI=1
 
-case $mode in
-  now)
-    state begin now space:"Espaço livre":1 prune:"Limpar cache":1 snapshot:Snapshot:2 doxia:DoxIA:2 \
-      system:"Pacotes do sistema":30 migrate:"Migrações":4 hooks:"Configuração do DoxIA":10 \
-      flatpak:"Apps Flatpak":8 mise:"Ferramentas (mise)":3 orphans:"Pacotes órfãos":2
-    ;;
-  boot)
-    state begin boot space:"Espaço livre":1 prune:"Limpar cache":1 snapshot:Snapshot:2 doxia:DoxIA:2 \
-      flatpak:"Apps Flatpak":8 mise:"Ferramentas (mise)":3 download:"Baixar pacotes do sistema":25 \
-      arm:"Preparar o reinício":2
-    ;;
-  flatpak)
-    state begin flatpak flatpak:"Apps Flatpak":1
-    run_step flatpak doxia-update-aur-pkgs
-    doxia-update-status
-    state finish ok
-    exit 0
-    ;;
-esac
+if [[ $mode == "flatpak" ]]; then
+  state begin flatpak flatpak:"Apps Flatpak":1
+  run_step flatpak doxia-update-aur-pkgs
+  doxia-update-status
+  state finish ok
+  exit 0
+fi
+
+state begin "$mode" space:"Espaço livre":1 flatpak:"Apps Flatpak":8 mise:"Ferramentas (mise)":3 \
+  system:"Baixar o novo DoxIA":40
 
 run_step space doxia-update-requires-free-space
 
-if (( assume_yes )) || doxia-update-confirm "$mode"; then
-  # The exact commands the password authorizes, shown in the update window.
-  root_commands=("dnf clean packages")
-  [[ $snapshot == "true" ]] && root_commands+=("snapper create  (doxia-snapshot create)")
-  root_commands+=("flatpak update -y --noninteractive")
-  if [[ $mode == "boot" ]]; then
-    root_commands+=("dnf upgrade --offline --refresh -y" "doxia-update-offline arm  (prepara o reinício)"
-      "no reinício: migrações e fedora/update.sh  (doxia-update-finish.service)")
-    [[ $autoremove == "true" ]] && root_commands+=("no reinício: dnf autoremove -y")
-  else
-    root_commands+=("dnf upgrade --refresh -y" "migrações e fedora/update.sh  (podem usar sudo)")
-    [[ $autoremove == "true" ]] && root_commands+=("dnf autoremove -y")
-  fi
-  state set rootCommands "$(printf '%s\n' "${root_commands[@]}" | jq -R . | jq -sc .)"
+(( assume_yes )) || doxia-update-confirm "$mode" || exit 0
 
-  # One password for the whole update. sudo forgets it after 5 minutes, and the
-  # package upgrade alone often takes longer, so every later step would ask
-  # again: ask once here and keep it fresh in the background until the end.
-  if (( gui )); then
-    run_dir="${XDG_RUNTIME_DIR:-/tmp}/doxia-update"
-    rm -f "$run_dir/askpass.fifo" "$run_dir/askpass.count"
-    mkfifo -m 0600 "$run_dir/askpass.fifo"
-    sudo -k
-    if ! SUDO_ASKPASS="$DOXIA_PATH/bin/doxia-update-askpass" sudo -A -v 2>/dev/null; then
-      rm -f "$run_dir/askpass.fifo"
-      trap - ERR
-      state finish canceled "Senha não confirmada"
-      exit 1
-    fi
+# The exact commands the password authorizes, shown in the update window.
+root_commands=("flatpak update -y --noninteractive" "bootc upgrade  (baixa e prepara a nova imagem)")
+[[ $mode == "now" ]] && root_commands+=("reinício logo em seguida")
+state set rootCommands "$(printf '%s\n' "${root_commands[@]}" | jq -R . | jq -sc .)"
+
+# One password for the whole update, kept fresh in the background: pulling
+# the image can take longer than sudo remembers it.
+if (( gui )); then
+  run_dir="${XDG_RUNTIME_DIR:-/tmp}/doxia-update"
+  rm -f "$run_dir/askpass.fifo" "$run_dir/askpass.count"
+  mkfifo -m 0600 "$run_dir/askpass.fifo"
+  sudo -k
+  if ! SUDO_ASKPASS="$DOXIA_PATH/bin/doxia-update-askpass" sudo -A -v 2>/dev/null; then
     rm -f "$run_dir/askpass.fifo"
-  else
-    sudo -v || exit 1
+    trap - ERR
+    state finish canceled "Senha não confirmada"
+    exit 1
   fi
-  # Its sleep outlives the update by up to 50 seconds. Holding the update lock or
-  # the update's output that long would turn a retry away as already running.
-  (
-    [[ -n ${DOXIA_UPDATE_LOCK_FD:-} ]] && exec {DOXIA_UPDATE_LOCK_FD}>&-
-    while kill -0 $$ 2>/dev/null; do sudo -n -v 2>/dev/null; sleep 50; done
-  ) >/dev/null 2>&1 &
-  sudo_keepalive=$!
-  trap 'kill "$sudo_keepalive" 2>/dev/null; doxia-update-stay-awake stop' EXIT
+  rm -f "$run_dir/askpass.fifo"
+else
+  sudo -v || exit 1
+fi
+# Its sleep outlives the update by up to 50 seconds. Holding the update lock or
+# the update's output that long would turn a retry away as already running.
+(
+  [[ -n ${DOXIA_UPDATE_LOCK_FD:-} ]] && exec {DOXIA_UPDATE_LOCK_FD}>&-
+  while kill -0 $$ 2>/dev/null; do sudo -n -v 2>/dev/null; sleep 50; done
+) >/dev/null 2>&1 &
+sudo_keepalive=$!
+trap 'kill "$sudo_keepalive" 2>/dev/null; doxia-update-stay-awake stop' EXIT
 
-  # Before the snapshot: the cache is on the snapshotted subvolume, so pruning
-  # after it frees nothing until that snapshot ages out.
-  run_step prune doxia-update-pkg-prune
+doxia-update-stay-awake start
 
-  # 127 means Snapper is deliberately absent. Any other failure already said
-  # what went wrong, and a missing snapshot is not worth blocking an update
-  # over, but it must not pass for one either.
-  if [[ $snapshot == "true" ]]; then
-    current_step=snapshot
-    state step snapshot run
-    if doxia-snapshot create; then
-      state step snapshot done
-    else
-      echo -e "\e[33mContinuing the update without a snapshot.\e[0m" >&2
-      state step snapshot skip "falhou"
-    fi
-  elif doxia-cmd-present snapper; then
-    skip_step snapshot "desligado"
-  else
-    skip_step snapshot "sem Snapper"
-  fi
+# Flatpak and mise live outside the image, so they update now.
+run_step flatpak doxia-update-aur-pkgs
+run_step mise doxia-update-mise
+run_step system doxia-update-image
 
-  doxia-update-stay-awake start
+doxia-update-analyze-logs
+doxia-update-check >/dev/null || true
+doxia-update-status
 
-  old_head=$(git -C "$DOXIA_PATH" rev-parse HEAD 2>/dev/null || true)
-  run_step doxia doxia-update-dev
-  doxia-update-keyring
-  # Besides its own QML, the shell loads at startup what fedora/update.sh puts in
-  # place from these: the DoxIA bar plugins and layout (apply-bar), the Lucide
-  # icon theme and DoxIA Shell font, and the theme's shell.toml. Without a
-  # restart they only show after the next login.
-  shell_paths=(shell fedora/doxia/plugins fedora/doxia/apply-bar fedora/doxia/lucide themes)
-  if [[ -n $old_head ]] && ! git -C "$DOXIA_PATH" diff --quiet "$old_head" HEAD -- "${shell_paths[@]}" 2>/dev/null; then
-    export DOXIA_UPDATE_SHELL_CHANGED=1
-  fi
+doxia-update-stay-awake stop
+kill "$sudo_keepalive" 2>/dev/null
+trap - EXIT ERR
 
-  packages=$(doxia-update-check --cached 2>/dev/null | jq '.system | length' 2>/dev/null || echo 0)
-  migrations=$(doxia-migrate --pending 2>/dev/null | grep -c . || true)
-
-  finish_live() {
-    # Migrations ship with the packages installed here and are written against
-    # them, so everything below waits on this finishing. An upgrade that stopped
-    # takes the update with it rather than migrating against what is still on disk.
-    run_step migrate doxia-migrate
-    run_step hooks doxia-hook post-update
-    [[ $mode == "now" ]] && run_step flatpak doxia-update-aur-pkgs
-    [[ $mode == "now" ]] && run_step mise doxia-update-mise
-    if [[ $autoremove == "true" ]]; then
-      run_step orphans doxia-update-orphan-pkgs --auto
-    else
-      run_step orphans doxia-update-orphan-pkgs
-    fi
-  }
-
-  if [[ $mode == "boot" ]]; then
-    # Flatpak and mise stay out of the system, so they update now either way.
-    run_step flatpak doxia-update-aur-pkgs
-    run_step mise doxia-update-mise
-    run_step download doxia-update-system-pkgs --offline
-
-    offline_status=$(sed -n 's/^status = "\(.*\)"/\1/p' /usr/lib/sysimage/libdnf5/offline/offline-transaction-state.toml 2>/dev/null)
-    if [[ $offline_status == "download-complete" ]]; then
-      current_step=arm
-      state step arm run
-      staged_list=$(mktemp)
-      doxia-update-check --cached 2>/dev/null |
-        jq --argjson now "$(date +%s)" '{packages: [.system[] | "\(.name) \(.from) → \(.to)"], stagedAt: $now}' > "$staged_list"
-      sudo "$DOXIA_PATH/bin/doxia-update-offline" arm "$USER" "$staged_list"
-      rm -f "$staged_list"
-      state step arm done
-      state set summary "{\"packages\": $packages}"
-      doxia-update-status
-      kill "$sudo_keepalive" 2>/dev/null
-      doxia-update-stay-awake stop
-      trap - EXIT ERR
-      state finish staged
-
-      if (( ! assume_yes )); then
-        echo
-        gum confirm "A atualização instala no próximo reinício. Reiniciar agora?" && doxia-system-reboot
-      else
-        echo "The update installs on the next reboot."
-      fi
-      exit 0
-    fi
-
-    # Nothing for dnf: what came in (DoxIA commits) applies now, no reboot.
-    state step download skip "nada novo"
-    state step arm skip "sem reinício"
-    state add migrate "Migrações" 4 arm
-    state add hooks "Configuração do DoxIA" 10 migrate
-    state add orphans "Pacotes órfãos" 2 hooks
-    packages=0
-    finish_live
-  else
-    run_step system doxia-update-system-pkgs
-    finish_live
-  fi
-
-  doxia-update-analyze-logs
-  doxia-update-status
-  state set summary "{\"packages\": $packages, \"migrations\": $migrations}"
-
-  # Release update-owned inhibitors before offering a reboot. A confirmed
-  # reboot can terminate this process before its EXIT trap gets a chance to
-  # remove the persistent Stay Awake marker.
-  doxia-update-stay-awake stop
-  kill "$sudo_keepalive" 2>/dev/null
-  trap - EXIT ERR
-
-  # Records a needed reboot for the window (DOXIA_UPDATE_GUI) before the run
-  # is marked finished, and restarts the shell last.
-  doxia-update-restart
+if ! doxia-update-image staged; then
+  # Already on the newest image: only the apps changed.
   state finish ok
+  exit 0
+fi
+
+state set summary "$(doxia-update-check --cached | jq -c '{packages: (.staged.packages | length)}')"
+state finish staged
+
+if [[ $mode == "now" ]]; then
+  doxia-system-reboot
+elif (( ! assume_yes )); then
+  echo
+  gum confirm "O novo DoxIA começa no próximo reinício. Reiniciar agora?" && doxia-system-reboot
+else
+  echo "The new DoxIA starts on the next reboot."
 fi

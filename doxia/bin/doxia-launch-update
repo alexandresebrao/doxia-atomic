@@ -3,8 +3,8 @@
 # doxia:summary=Open the Atualizar DoxIA window
 # doxia:args=[--prefs]
 
-# The window is its own app (fedora/doxia/rs/atualizar, installed by
-# fedora/doxia/install-rs), so the update can reload and restart the
+# The window is its own app (rs/atualizar, installed by
+# lib/install-rs), so the update can reload and restart the
 # shell under it. A second launch raises the open window. Without the app,
 # the doxia.update shell panel; without a running shell, the update in a
 # terminal.

@@ -11,7 +11,7 @@ that only matters on a machine still running it.
 | `login` | (library `doxia-login`) | the login and lock screens' look, shared by both: the landscape, the clock, the sign-in pieces, `login.css` |
 | `greeter` | `doxia-greeter` | SDDM and its QML theme: the login screen, a greetd greeter |
 | `atualizar` | `doxia-atualizar` | the `doxia.update` panel (`doxia-launch-update`) |
-| `painel` | `doxia-painel` | the Python/libadwaita Painel Rápido (`fedora/doxia/painel`) |
+| `painel` | `doxia-painel` | the Python/libadwaita Painel Rápido (`lib/painel`) |
 | `freeze` | `doxia-freeze` | `hyprpicker -r -z`: the screen freeze under slurp in the capture scripts |
 | `shell` | `doxia-shell` | Quickshell's layer-shell surfaces, one at a time: the OSD, the notifications, the polkit agent, the lock screen, the DoxIA menu, the Start menu and the pickers (clipboard, emojis, images) so far |
 
@@ -40,7 +40,7 @@ launch raises the open window.
 
 Same `painel.json`, credentials, recent pipelines, action types and shortcuts
 as the Python app (see the `/painel` skill), in the shell's look.
-`fedora/doxia/painel` stays the entry point (`doxia-painel` on the PATH, the
+`lib/painel` stays the entry point (`doxia-painel` on the PATH, the
 launcher, SUPER+ALT+P): it execs `/usr/local/bin/doxia-painel` when installed
 and runs itself otherwise (`DOXIA_PAINEL_PY=1` forces it). HTTP goes through
 `ureq` (rustls).
@@ -48,7 +48,7 @@ and runs itself otherwise (`DOXIA_PAINEL_PY=1` forces it). HTTP goes through
 ## doxia-shell
 
 The long-running half: a GTK application that owns `org.doxia.Shell` on the
-session bus, run by the user unit `fedora/doxia/doxia-shell.service`
+session bus, run by the user unit `lib/doxia-shell.service`
 (installed by `install-user-units`, started by mango's autostart, restarted
 if it dies). It answers the shell's IPC calls through
 `org.doxia.Shell.Call(target, method, args)` at `/org/doxia/Shell/Ipc`;
@@ -136,7 +136,7 @@ busctl --user call org.doxia.Shell /org/doxia/Shell/Ipc org.doxia.Shell \
   `border-image` ignores `border-radius`. Not carried over: the "Launching…"
   OSD for slow apps.
 
-- The Start menu (`iniciar/`), replacing `fedora/doxia/plugins/doxia.iniciar`:
+- The Start menu (`iniciar/`), replacing `lib/plugins/doxia.iniciar`:
   the Windows 98 cascade in the menu's colors (the relief is stacked over
   black, as in the QML, so it reads nearly opaque). Programs come from the
   same app list as the menu's Apps, which honors `OnlyShowIn`/`NotShowIn`;
@@ -176,7 +176,7 @@ busctl --user call org.doxia.Shell /org/doxia/Shell/Ipc org.doxia.Shell \
   strip scrolls (`mmsg watch all-clients`), up to its edge. mango reports the
   windows only once they have moved, so during a three-finger swipe the
   picture follows the fingers off the touchpad's evdev node (`touchpad.rs`),
-  readable through the udev rule `fedora/doxia/install-touchpad-access`
+  readable through the udev rule `lib/install-touchpad-access`
   installs; without it the picture moves when the swipe is over.
 
 - The battery warning (`battery.rs`), replacing `shell/services/battery`:
@@ -223,7 +223,7 @@ and session from `/var/lib/greetd/doxia-greeter.state`, power actions from
 logind. If it can't run (missing, or three failures in two minutes) the
 session script falls back to agreety on the console.
 
-`fedora/doxia/install-greeter` installs it all and moves a machine off SDDM
+`lib/install-greeter` installs it all and moves a machine off SDDM
 (next boot; SDDM is removed without its scriptlets, which would stop the
 running session).
 
@@ -260,11 +260,11 @@ screenshot, or with `GSK_RENDERER=cairo` to compare.
 
 ```bash
 sudo dnf install cargo gtk4-devel gtk4-layer-shell-devel pam-devel
-fedora/doxia/rs/package          # tests, builds, packs; prints the archive and its sha256
-gh release create doxia-rs-<version> fedora/doxia/rs/dist/doxia-rs-<version>-x86_64.tar.gz \
+rs/package          # tests, builds, packs; prints the archive and its sha256
+gh release create doxia-rs-<version> rs/dist/doxia-rs-<version>-x86_64.tar.gz \
   --target fedora --latest=false
 ```
 
-Then set `version` and `sha256` in `fedora/doxia/install-rs`, which
+Then set `version` and `sha256` in `lib/install-rs`, which
 `fedora/install-system.sh` and `fedora/update.sh` run. Bump `version` in the
 workspace `Cargo.toml` for every release: the archive name carries it.

@@ -9,9 +9,9 @@
 # A clock still in the center moves to the right corner showing date and time,
 # with the weather after it,
 # and the Painel Rápido button (doxia.painel) leaves the bar: the Painel Rápido
-# app (fedora/doxia/painel) goes on the PATH as doxia-painel, in the launcher and
+# app (lib/painel) goes on the PATH as doxia-painel, in the launcher and
 # on SUPER+ALT+P.
-# The panel's svc script (fedora/doxia/plugins/doxia.services) goes on the PATH
+# The panel's svc script (lib/plugins/doxia.services) goes on the PATH
 # and its /servicos Claude Code skill to ~/.claude/skills. The copies of the
 # old Quickshell widgets in ~/.config/doxia/plugins are removed.
 # The bar floats (bar.floating) unless shell.json says otherwise.
@@ -33,8 +33,8 @@ done
 rmdir "$plugins" 2>/dev/null || true
 
 mkdir -p "$HOME/.local/bin"
-ln -sfn "$doxia_path/fedora/doxia/plugins/doxia.services/svc" "$HOME/.local/bin/svc"
-ln -sfn "$doxia_path/fedora/doxia/painel" "$HOME/.local/bin/doxia-painel"
+ln -sfn "$doxia_path/lib/plugins/doxia.services/svc" "$HOME/.local/bin/svc"
+ln -sfn "$doxia_path/lib/painel" "$HOME/.local/bin/doxia-painel"
 mkdir -p "$HOME/.local/share/applications"
 cat > "$HOME/.local/share/applications/org.doxia.Painel.desktop" <<DESKTOP
 [Desktop Entry]
@@ -42,7 +42,7 @@ Type=Application
 Name=Painel Rápido
 Comment=Atalhos do dia a dia: chamados, pipelines e tarefas
 Keywords=painel;atalhos;jira;chamado;gitlab;pipeline;tarefas;
-Exec=$doxia_path/fedora/doxia/painel
+Exec=$doxia_path/lib/painel
 Icon=utilities-terminal
 Terminal=false
 Categories=Utility;
@@ -50,7 +50,7 @@ StartupWMClass=org.doxia.Painel
 DESKTOP
 skills=$HOME/.claude/skills
 mkdir -p "$skills"
-for skill in "$doxia_path"/fedora/doxia/claude/skills/*/; do
+for skill in "$doxia_path"/lib/claude/skills/*/; do
   name=$(basename "$skill")
   rm -rf "${skills:?}/$name"
   cp -a "$skill" "$skills/$name"
@@ -130,7 +130,7 @@ jq '
 ' "$shell_json" > "$shell_json.tmp"
 mv "$shell_json.tmp" "$shell_json"
 
-# doxia-shell (fedora/doxia/rs/shell) takes over Quickshell's notification
+# doxia-shell (rs/shell) takes over Quickshell's notification
 # service and polkit agent, from 0.5.0 its lock screen, from 0.7.0 its
 # clipboard watchers and from 0.9.0 the idle timers (two would launch the
 # screensaver and lock twice). With it installed, keep them off in shell.json, so

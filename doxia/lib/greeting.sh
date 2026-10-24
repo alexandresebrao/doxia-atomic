@@ -1,5 +1,5 @@
 # DoxIA greeting for interactive bash and zsh shells. Linked from ~/.bashrc.d/doxia.sh
-# by fedora/update.sh and sourced by fedora/doxia/zsh/zshrc, so a git pull updates it.
+# by fedora/update.sh and sourced by lib/zsh/zshrc, so a git pull updates it.
 [[ $- == *i* ]] || return 0
 
 _doxia_tips=(

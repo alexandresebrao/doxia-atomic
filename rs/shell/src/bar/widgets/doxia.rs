@@ -1,4 +1,4 @@
-// DoxIA's own bar widgets (fedora/doxia/plugins): the emblem that opens the
+// DoxIA's own bar widgets (lib/plugins): the emblem that opens the
 // Start menu, the workspaces and the screen-sharing dot.
 
 use super::super::widget::{self, Button, Kind, Slot};
@@ -260,7 +260,7 @@ pub fn screenshare(ctx: &Rc<Ctx>) -> gtk::Widget {
   button.widget.add_css_class("bar-screenshare");
   button.set_tooltip("Compartilhando a tela — clique para parar");
   button.widget.set_visible(false);
-  let dir = format!("{}/fedora/doxia/plugins/doxia.screenshare", std::env::var("DOXIA_PATH").unwrap_or_default());
+  let dir = format!("{}/lib/plugins/doxia.screenshare", std::env::var("DOXIA_PATH").unwrap_or_default());
   let stop = format!("{dir}/stop.sh");
   button.on_press(move |_| crate::run::argv(&["sh", &stop]));
   let sharing = Rc::new(Cell::new(false));

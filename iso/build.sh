@@ -3,11 +3,12 @@
 # Builds the DoxIA installer ISO: Fedora's netinstall (Anaconda) rebuilt with lorax
 # as "DoxIA", with the generic logos instead of Fedora's, the DoxIA setup wizard
 # (wizard/) in front of Anaconda, the DoxIA boot menu theme and doxia.ks embedded.
-# Installing needs internet: packages come from Fedora's mirrors and %post clones
-# the latest of this repository's fedora branch.
+# Installing needs internet: the system is the DoxIA image, pulled from the
+# registry (doxia.ks, ostreecontainer).
 #
-#   sudo bash ~/.local/share/doxia/fedora/iso/build.sh [output dir]
+#   sudo bash iso/build.sh [output dir] [image]
 #
+# image defaults to ghcr.io/alexandresebrao/doxia:latest.
 # Needs lorax (dnf install lorax lorax-templates-generic) and ~6 GB free.
 
 set -euo pipefail
@@ -18,21 +19,14 @@ if (( EUID != 0 )); then
 fi
 
 iso_dir=$(cd "$(dirname "$0")" && pwd)
-doxia_path=$(cd "$iso_dir/../.." && pwd)
+doxia_path=$(cd "$iso_dir/../doxia" && pwd)
 release=$(rpm -E %fedora)
 arch=$(uname -m)
 out=$(realpath -m "${1:-$PWD/doxia-iso}")
 volid="DoxIA-$release-$arch"
 iso="$out/DoxIA-$release-$arch.iso"
 
-commit=$(git -C "$doxia_path" rev-parse HEAD)
-if ! git -C "$doxia_path" branch -r --contains "$commit" | grep -q 'origin/fedora'; then
-  echo "Commit $commit is not on origin/fedora: push it first, the installer clones the branch from GitHub." >&2
-  exit 1
-fi
-if [[ -n $(git -C "$doxia_path" status --porcelain) ]]; then
-  echo "Warning: uncommitted changes are not part of the ISO (it installs $commit)." >&2
-fi
+image=${2:-ghcr.io/alexandresebrao/doxia:latest}
 
 mirror=https://dl.fedoraproject.org/pub/fedora/linux
 work=$(mktemp -d "${TMPDIR:-/var/tmp}/doxia-iso.XXXXXX")
@@ -55,8 +49,8 @@ lorax \
   --logfile "$out/lorax.log" --tmp "$work" \
   "$work/lorax"
 
-echo "==> Embedding the kickstart (installs $commit) and the boot menu theme"
-sed "s/@COMMIT@/$commit/" "$iso_dir/doxia.ks" > "$work/doxia.ks"
+echo "==> Embedding the kickstart (installs $image) and the boot menu theme"
+sed "s#@IMAGE@#$image#" "$iso_dir/doxia.ks" > "$work/doxia.ks"
 # The installed system's GRUB theme, at /doxia-grub on the ISO. Both boot menus
 # (UEFI and BIOS) load it right after they find the ISO by its label, before the
 # entries; with gfxterm, the edit screen and command line need Unifont too.

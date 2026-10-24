@@ -1,5 +1,5 @@
 # DoxIA: nvm and SDKMAN! in every bash (linked as ~/.bashrc.d/dev-tools.sh by
-# fedora/doxia/install-dev-tools).
+# lib/install-dev-tools).
 
 export NVM_DIR="$HOME/.config/nvm"
 [[ -s $NVM_DIR/nvm.sh ]] && . "$NVM_DIR/nvm.sh"

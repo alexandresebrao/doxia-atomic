@@ -5,9 +5,9 @@
 # version) and SDKMAN!'s default JDK as the defaults: node and java come from them,
 # not from Fedora's packages
 # (install-system.sh drops LibreOffice and, with it, Fedora's JDK). Loads both in
-# every bash through ~/.bashrc.d/dev-tools.sh (fedora/doxia/dev-tools.sh). Skips
+# every bash through ~/.bashrc.d/dev-tools.sh (lib/dev-tools.sh). Skips
 # what is already installed; neither installer touches ~/.bashrc. Also puts the
-# "Versões do Node e do Java" window (fedora/doxia/dev-versions) in the launcher.
+# "Versões do Node e do Java" window (lib/dev-versions) in the launcher.
 # Run as the user by install-user.sh and fedora/update.sh.
 
 set -euo pipefail
@@ -17,7 +17,7 @@ if (( EUID == 0 )); then
   exit 1
 fi
 
-doxia_path=${DOXIA_PATH:-$HOME/.local/share/doxia}
+doxia_path=${DOXIA_PATH:-/usr/share/doxia}
 nvm_dir=$HOME/.config/nvm
 
 # nvm's documented git install, at its latest release. awk reads the whole list:
@@ -67,9 +67,9 @@ if [[ ! -e $HOME/.sdkman/candidates/java/current ]]; then
 fi
 
 mkdir -p "$HOME/.bashrc.d"
-ln -sfn "$doxia_path/fedora/doxia/dev-tools.sh" "$HOME/.bashrc.d/dev-tools.sh"
+ln -sfn "$doxia_path/lib/dev-tools.sh" "$HOME/.bashrc.d/dev-tools.sh"
 
-# The window that picks the defaults and installs versions (fedora/doxia/dev-versions),
+# The window that picks the defaults and installs versions (lib/dev-versions),
 # in the launcher. Named after its app ID so the dock and switcher match it.
 mkdir -p "$HOME/.local/share/applications"
 cat > "$HOME/.local/share/applications/org.doxia.DevVersions.desktop" <<DESKTOP
@@ -78,7 +78,7 @@ Type=Application
 Name=Versões do Node e do Java
 Comment=Escolha a versão padrão e instale versões do Node.js (nvm) e do Java (SDKMAN!)
 Keywords=node;nodejs;npm;nvm;java;jdk;sdkman;oracle;
-Exec=python3 $doxia_path/fedora/doxia/dev-versions
+Exec=python3 $doxia_path/lib/dev-versions
 Icon=java
 Categories=Development;
 DESKTOP

@@ -11,7 +11,7 @@
 
 data=/usr/share/doxia/greeter
 config=$data/mango.conf
-greeter=/usr/local/bin/doxia-greeter
+greeter=/usr/bin/doxia-greeter
 fails=/tmp/doxia-greeter.fails
 
 recent=0

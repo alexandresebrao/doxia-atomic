@@ -692,7 +692,7 @@ impl Window {
     let sys = model::system_count(st);
     col.append(&source_row(
       G_CUBE,
-      &if sys > 0 { format!("Sistema · {}", model::plural(sys, "pacote", "pacotes")) } else { "Sistema".into() },
+      &if sys > 0 { "Sistema · nova versão do DoxIA".to_string() } else { "Sistema".into() },
       &if sys > 0 { model::system_names(st, 4) } else { "em dia".into() },
       if sys == 0 { "EM DIA" } else if boot { "NO REINÍCIO" } else { "AGORA" },
       if sys == 0 { "c-dim" } else if boot { "c-warn" } else { "c-ok" },
@@ -736,9 +736,9 @@ impl Window {
       };
       let text = if sys > 0 {
         if boot {
-          "Os pacotes do sistema serão baixados agora e instalados no próximo reinício. Você pode continuar usando o computador."
+          "O novo DoxIA é baixado agora e começa no próximo reinício. Você pode continuar usando o computador."
         } else {
-          "Os pacotes do sistema serão instalados agora. Feche os apps que estiverem sendo atualizados."
+          "O novo DoxIA é baixado agora e o computador reinicia em seguida. Salve o que estiver aberto."
         }
       } else if model::only_flatpak(st) {
         "Só apps Flatpak. Eles são atualizados agora, sem senha e sem reiniciar."
@@ -798,15 +798,12 @@ impl Window {
   fn body_staged(self: &Rc<Self>) {
     let s = self.state.borrow();
     let packages = model::staged_packages(s.status.as_ref());
-    let autoremove = model::flag(&s.prefs, "autoremoveOrphans");
     let col = vbox(12);
     let count = if packages.is_empty() { String::new() } else { packages.len().to_string() };
     let steps = serde_json::json!([
-      {"id": "a", "label": "Pacotes baixados e testados", "state": "done", "detail": count},
-      {"id": "b", "label": "Instalar durante o reinício", "state": "todo"},
-      {"id": "c", "label": "Migrações e configuração do DoxIA", "state": "todo"},
-      {"id": "d", "label": "Remover pacotes órfãos", "state": if autoremove { "todo" } else { "skip" },
-       "detail": if autoremove { "auto" } else { "desligado" }}
+      {"id": "a", "label": "Novo DoxIA baixado", "state": "done", "detail": count},
+      {"id": "b", "label": "Começa no próximo reinício", "state": "todo"},
+      {"id": "c", "label": "O atual fica no menu de boot, para voltar", "state": "todo"}
     ]);
     col.append(&step_list(steps.as_array().unwrap()));
     if !packages.is_empty() {
@@ -882,22 +879,21 @@ impl Window {
   fn body_prefs(self: &Rc<Self>) {
     let s = self.state.borrow();
     let prefs = s.prefs.clone();
-    let snapper = s.status.as_ref().is_none_or(|st| st.get("snapper").and_then(Value::as_bool) != Some(false));
     drop(s);
     let col = vbox(10);
     let mode = model::text(&prefs, "mode").to_string();
 
-    col.append(&label("QUANDO APLICAR OS PACOTES DO SISTEMA", &["caption", "section"]));
+    col.append(&label("QUANDO COMEÇAR O NOVO DOXIA", &["caption", "section"]));
     col.append(&self.radio_card(
       mode == "boot",
       "No próximo reinício",
-      "Baixa agora e instala com o sistema parado (dnf offline), mais seguro e sem apps abertos usando bibliotecas trocadas. Flatpak e DoxIA continuam sendo aplicados na hora.",
+      "Baixa agora e começa quando você reiniciar. O sistema em uso não muda, e o anterior fica no menu de boot. Os Flatpaks são atualizados na hora.",
       "boot",
     ));
     col.append(&self.radio_card(
       mode == "now",
-      "Agora, com o sistema rodando",
-      "Instala na hora e só pede reinício se o kernel ou o mango mudarem.",
+      "Agora, reiniciando em seguida",
+      "Baixa e reinicia o computador assim que terminar.",
       "now",
     ));
 
@@ -906,22 +902,6 @@ impl Window {
       l.set_margin_top(6);
       l
     };
-    col.append(&section("LIMPEZA"));
-    col.append(&self.toggle_row(
-      "Remover pacotes órfãos automaticamente",
-      "Roda dnf autoremove no fim da atualização, sem perguntar.",
-      model::flag(&prefs, "autoremoveOrphans"),
-      true,
-      "autoremoveOrphans",
-    ));
-    col.append(&self.toggle_row(
-      "Criar snapshot antes de atualizar",
-      if snapper { "Snapper. Dá para voltar pelo menu de boot se algo quebrar." } else { "O Snapper não está instalado." },
-      model::flag(&prefs, "snapshot") && snapper,
-      snapper,
-      "snapshot",
-    ));
-
     col.append(&section("VERIFICAÇÃO"));
     col.append(&self.check_hours_row(model::num(&prefs, "checkHours") as i64));
     col.append(&self.toggle_row(

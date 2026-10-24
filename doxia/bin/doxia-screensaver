@@ -36,7 +36,7 @@ wait_for_terminal_resize() {
 
 wait_for_terminal_resize
 
-# DoxIA: the dachshund running through the night (fedora/doxia/screensaver-salsicha)
+# DoxIA: the dachshund running through the night (lib/screensaver-salsicha)
 # instead of the TTE effects below, which stay so upstream changes keep merging.
 # Not exec'd: the cursor hidden above has to come back when it quits.
 python3 "$DOXIA_PATH/lib/screensaver-salsicha"

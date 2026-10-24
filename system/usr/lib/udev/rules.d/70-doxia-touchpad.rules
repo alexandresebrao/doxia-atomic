@@ -1,0 +1,3 @@
+# The touchpad for doxia-shell (the background follows three-finger swipes):
+# readable by the user at the seat.
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_TOUCHPAD}=="1", TAG+="uaccess"

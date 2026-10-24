@@ -1,4 +1,4 @@
-# DoxIA theme for Oh My Zsh (fedora/doxia/install-zsh links it into
+# DoxIA theme for Oh My Zsh (lib/install-zsh links it into
 # ~/.oh-my-zsh/custom/themes): the folder, the git branch, and the Node.js and
 # Java in use (nvm's and SDKMAN!'s, so `nvm use` and `sdk use` show right away);
 # a red ❯ below and the exit code on the right when a command fails. Theme colors,

@@ -1128,9 +1128,10 @@ class Wizard(Gtk.Window):
         if (STATE / "installed").exists():
             self.finished()
             return False
-        log = SYSROOT / "root/doxia-install.log"
+        # The %post log, in the deployment's /var (the image keeps /var per stateroot)
+        log = SYSROOT / "ostree/deploy/default/var/log/doxia-install.log"
         if not DEMO and log.exists():
-            # DoxIA's own %post: clone and run the install scripts (the last ~20%)
+            # DoxIA's own %post: the account's setup (the last ~20%)
             lines = log.read_text(errors="replace").splitlines()
             steps = [ln[4:].strip() for ln in lines if ln.startswith("==> ")]
             detail = steps[-1] if steps else "Baixando o DoxIA"

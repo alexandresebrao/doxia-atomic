@@ -1,4 +1,4 @@
-// doxia.fortivpn (fedora/doxia/plugins/doxia.fortivpn): openfortivpn
+// doxia.fortivpn (lib/plugins/doxia.fortivpn): openfortivpn
 // profiles from the bar. The icon (a lock while connected, dim otherwise);
 // a right click connects or disconnects the current profile. Its panel:
 // the state with the switch, errors and an untrusted gateway certificate
@@ -30,7 +30,7 @@ const BACK: &str = "\u{F004D}";
 const HELPER: &str = "/usr/local/libexec/doxia-fortivpn-helper";
 
 fn plugin_dir() -> String {
-  format!("{}/fedora/doxia/plugins/doxia.fortivpn", std::env::var("DOXIA_PATH").unwrap_or_default())
+  format!("{}/lib/plugins/doxia.fortivpn", std::env::var("DOXIA_PATH").unwrap_or_default())
 }
 
 pub fn duration(seconds: f64) -> String {

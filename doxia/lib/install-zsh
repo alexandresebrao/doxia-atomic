@@ -1,20 +1,20 @@
 #!/bin/bash
 
-# zsh with Oh My Zsh, the DoxIA theme (fedora/doxia/zsh/doxia.zsh-theme: folder, git
+# zsh with Oh My Zsh, the DoxIA theme (lib/zsh/doxia.zsh-theme: folder, git
 # branch, Node.js and Java versions) and the zsh-autosuggestions and
 # zsh-syntax-highlighting plugins, cloned the Oh My Zsh way into custom/plugins.
 # Writes ~/.zshrc when there is none; an existing one only gets the line that
-# sources fedora/doxia/zsh/doxia.zsh (PATH, nvm and SDKMAN!, greeting), saved next
+# sources lib/zsh/doxia.zsh (PATH, nvm and SDKMAN!, greeting), saved next
 # to it first, and keeps its theme and plugins. The zsh package and making it the
 # login shell are install-system.sh's (root) and update.sh's. Run as the user by
 # install-user.sh and fedora/update.sh.
 
 set -euo pipefail
 
-doxia_path=${DOXIA_PATH:-$HOME/.local/share/doxia}
+doxia_path=${DOXIA_PATH:-/usr/share/doxia}
 omz=$HOME/.oh-my-zsh
 custom=$omz/custom
-line='source ~/.local/share/doxia/fedora/doxia/zsh/doxia.zsh'
+line='source /usr/share/doxia/lib/zsh/doxia.zsh'
 
 if [[ ! -f $omz/oh-my-zsh.sh ]]; then
   echo "  Oh My Zsh"
@@ -27,7 +27,7 @@ for plugin in zsh-autosuggestions zsh-syntax-highlighting; do
   fi
 done
 mkdir -p "$custom/themes" "$HOME/.zshrc.d"
-ln -sfn "$doxia_path/fedora/doxia/zsh/doxia.zsh-theme" "$custom/themes/doxia.zsh-theme"
+ln -sfn "$doxia_path/lib/zsh/doxia.zsh-theme" "$custom/themes/doxia.zsh-theme"
 
 rc=$HOME/.zshrc
 if [[ ! -e $rc ]]; then

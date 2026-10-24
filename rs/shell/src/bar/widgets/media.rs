@@ -1,4 +1,4 @@
-// doxia.media (fedora/doxia/plugins/doxia.media/Panel.qml): what plays, in
+// doxia.media (lib/plugins/doxia.media/Panel.qml): what plays, in
 // the bar, the title running as a marquee in a fixed width while it plays;
 // with nothing playing, a music glyph that opens Spotify. Its panel has the
 // album art, the track, a seekable progress bar, the controls, the

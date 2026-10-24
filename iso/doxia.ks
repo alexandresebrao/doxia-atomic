@@ -1,11 +1,11 @@
-# DoxIA installer kickstart (build.sh fills in @COMMIT@ and embeds it in the ISO).
+# DoxIA installer kickstart (build.sh fills in @IMAGE@ and embeds it in the ISO).
 #
 # The DoxIA wizard (wizard/doxia-installer.py) runs from %pre and asks for the
 # language, keyboard, disk, account and computer name; it writes them to
 # /tmp/doxia/answers.ks, included below. Anaconda then installs without its own
-# interface (cmdline) while the wizard shows the progress. The %post clones the
-# latest of this repository's fedora branch, runs the same scripts as a manual
-# install and upgrades every package.
+# interface (cmdline) while the wizard shows the progress. The system is the
+# DoxIA image itself (ostreecontainer): the installed machine follows it with
+# bootc upgrade. The %post sets up the account the wizard created.
 
 cmdline
 # Without it, cmdline mode ends at "Press ENTER to quit" on tty1 and never reboots.
@@ -18,83 +18,38 @@ reboot --eject
 
 %include /tmp/doxia/answers.ks
 
-url --mirrorlist=https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-$releasever&arch=$basearch
-repo --name=updates --mirrorlist=https://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f$releasever&arch=$basearch
+# The image is pulled from the registry while installing; the installed
+# system tracks the same reference (bootc upgrade, the Atualizar window).
+ostreecontainer --url=@IMAGE@ --transport=registry --no-signature-verification
 
-%packages
-@core
-@standard
-@hardware-support
-@base-graphical
-@fonts
-@multimedia
-@networkmanager-submodules
-@printing
-@guest-desktop-agents
-git
-plymouth-theme-spinner
-redhat-display-fonts
-redhat-text-fonts
-# A Fedora remix ships the generic logos instead of Fedora's trademarks.
-generic-logos
--fedora-logos
-%end
-
-%post --log=/root/doxia-install.log
+%post --log=/var/log/doxia-install.log
 set -euo pipefail
-
-repo=https://github.com/alexandresebrao/DoxIA.git
-commit=@COMMIT@
 
 user=$(awk -F: '$3 >= 1000 && $3 < 60000 { print $1; exit }' /etc/passwd)
 if [[ -z $user ]]; then
-  echo "DoxIA: no user account was created in the installer, so the desktop was not set up."
-  echo "Create one, then follow the README: $repo"
+  echo "DoxIA: no user account was created in the installer; the first login sets it up."
   exit 0
 fi
-home=$(getent passwd "$user" | cut -d: -f6)
-checkout=$home/.local/share/doxia
 
-# The latest of the branch, as the Atualizar menu would bring right after the first
-# boot, not only the commit the ISO was built from.
-echo "==> Cloning DoxIA for $user (latest of the fedora branch; the ISO has $commit)"
-runuser -u "$user" -- mkdir -p "$home/.local/share"
-runuser -u "$user" -- git clone --branch fedora "$repo" "$checkout"
-echo "  installing $(runuser -u "$user" -- git -C "$checkout" rev-parse HEAD)"
+# The login screen starts on this account and the DoxIA session.
+state=/var/lib/greetd/doxia-greeter.state
+install -d -o greetd -g greetd /var/lib/greetd
+printf 'user=%s\nsession=%s\n' "$user" /usr/share/wayland-sessions/doxia.desktop > "$state"
+chown greetd:greetd "$state"
+restorecon -R /var/lib/greetd 2>/dev/null || true
 
-SUDO_USER=$user bash "$checkout/fedora/install-system.sh"
-
-# Anaconda already installed from the updates repo; this catches what was published
-# while it ran.
-echo "==> Updating every package"
-dnf upgrade -y --refresh
-runuser -l "$user" -c 'bash ~/.local/share/doxia/fedora/install-user.sh'
-
-echo "==> First boot: update before the login screen (fedora/doxia/first-boot-update)"
-# A root-owned copy: the service runs it as root, and the checkout is the user's.
-install -Dm755 "$checkout/fedora/doxia/first-boot-update" /usr/libexec/doxia/first-boot-update
-sed "s/@USER@/$user/" "$checkout/fedora/doxia/doxia-first-boot.service" > /etc/systemd/system/doxia-first-boot.service
-install -d /var/lib/doxia
-touch /var/lib/doxia/first-boot-pending
-systemctl enable doxia-first-boot.service
-
-echo "==> Boot splash (Fedora's spinner with the DoxIA watermark)"
-theme=/usr/share/plymouth/themes/doxia
-install -d "$theme"
-cp /usr/share/plymouth/themes/spinner/*.png "$theme/"
-install -m644 "$checkout"/default/plymouth/doxia/{doxia.plymouth,watermark.png} "$theme/"
-plymouth-set-default-theme doxia
-dracut -f --regenerate-all
-
-echo "==> Boot menu (graphical GRUB with the DoxIA theme)"
-bash "$checkout/fedora/doxia/install-grub-theme" "$checkout"
+# What doxia-setup-user.service would do on the first login, done here so the
+# first login goes straight to the desktop.
+echo "==> Setting up $user (theme, fonts, shell, apps)"
+runuser -l "$user" -c 'dbus-run-session -- /usr/share/doxia/lib/setup-user' ||
+  echo "  The setup did not finish; the first login runs it again."
 %end
 
 # Last: tell the wizard the installation is done, then hold Anaconda (which reboots
 # as soon as it finishes, see reboot above) until the Restart button is clicked.
 %post --nochroot
 # Keep the network joined in the wizard (Wi-Fi password included) on the installed system
-target=/mnt/sysroot/etc/NetworkManager/system-connections
+target=$ANA_INSTALL_PATH/etc/NetworkManager/system-connections
 mkdir -p "$target"
 for connection in /etc/NetworkManager/system-connections/*.nmconnection; do
   [[ -e $connection ]] || continue

@@ -1,4 +1,4 @@
-// doxia.usage (fedora/doxia/plugins/doxia.usage/Usage.qml): CPU and memory,
+// doxia.usage (lib/plugins/doxia.usage/Usage.qml): CPU and memory,
 // each an icon with a small graph of the last minute beside it, and, while
 // on battery or not full, the battery with a vertical bar filling with the
 // percentage; in the accent (gold past 75%; the battery red under 20% and

@@ -4,10 +4,9 @@ Deeper instructions for specific kinds of work live in `agents/skills/`. Read th
 matching guide before starting:
 
 - [`agents/skills/command-metadata.md`](agents/skills/command-metadata.md) - adding or changing commands in `bin/`
-- `fedora/install-system.sh` (root) and `fedora/install-user.sh` set a machine up; `fedora/update.sh` brings an installed one along. The shell, lock screen, greeter and apps are the Rust workspace in `fedora/doxia/rs` (see its README)
+- DoxIA is a bootc image (see README.md): `Containerfile` and `build/steps/` make the system, `doxia/` is installed read-only to `/usr/share/doxia`, `doxia/lib/setup-user` sets up each account. `/usr` cannot change at runtime: no `dnf install` from commands, nothing written under `$DOXIA_PATH`. The shell, lock screen, greeter and apps are the Rust workspace in `rs` (see its README)
 - [`agents/skills/icon-font.md`](agents/skills/icon-font.md) - adding branded glyphs to `default/fonts/doxia/doxia.ttf`
 - [`agents/skills/visual-verification.md`](agents/skills/visual-verification.md) - verifying any change with a visual effect in the running UI
-- [`docs/migrations.md`](docs/migrations.md) - creating or changing migrations under `migrations/`
 
 # Style
 
@@ -17,7 +16,6 @@ matching guide before starting:
 - Prefer `(( ))` over numeric operators inside `[[ ]]` (e.g., `(( count < 50 ))`, not `[[ $count -lt 50 ]]`)
 - For strings/paths with spaces, quote them instead of escaping spaces with `\ ` (e.g., `"$APP_DIR/Disk Usage.desktop"`, not `$APP_DIR/Disk\ Usage.desktop`)
 - Shebangs must use `#!/bin/bash` consistently (never `#!/usr/bin/env bash`)
-- Scripts under `install/` and `migrations/` may be sourced and intentionally omit shebangs
 
 # Command Naming
 

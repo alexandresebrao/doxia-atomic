@@ -1,0 +1,25 @@
+# The Flatpak apps of a fresh install: Evince, ONLYOFFICE (in Brazilian
+# Portuguese whatever the system's language), Firefox and LibreWolf. Flatpaks
+# live in /var, outside the image, so the first boot online installs them.
+[Unit]
+Description=DoxIA: install the default Flatpak apps
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/var/lib/doxia/flatpak-apps-done
+
+[Service]
+Type=oneshot
+StateDirectory=doxia
+ExecStart=/usr/bin/flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+ExecStart=/usr/bin/flatpak install -y --noninteractive flathub org.gnome.Evince org.onlyoffice.desktopeditors org.mozilla.firefox io.gitlab.librewolf-community
+# ONLYOFFICE takes its interface language from LANG and ships the pt-BR
+# translation and spell checker itself. Its Qt and GTK default to IBus inside
+# Flatpak, whose portal fails without ibus-daemon (which DoxIA doesn't run):
+# use their built-in input (dead keys and compose included).
+ExecStart=/usr/bin/flatpak override --system --env=LANG=pt_BR.UTF-8 --env=LANGUAGE=pt_BR --env=QT_IM_MODULE=compose --env=GTK_IM_MODULE=gtk-im-context-simple org.onlyoffice.desktopeditors
+ExecStartPost=/usr/bin/touch /var/lib/doxia/flatpak-apps-done
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

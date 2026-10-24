@@ -9,7 +9,7 @@ LOGO_ANSI="$HOME/.config/doxia/branding/logo.ansi"
 clear
 echo
 # Fedora port: the brand as an image in terminals that draw images (see
-# fedora/doxia/term-graphics), the ANSI wordmark elsewhere.
+# lib/term-graphics), the ANSI wordmark elsewhere.
 if "$DOXIA_PATH/lib/show-brand"; then
   :
 elif [[ -r $LOGO_ANSI ]]; then

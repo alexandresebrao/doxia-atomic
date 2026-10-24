@@ -3,7 +3,7 @@
 
 Uso (só quando for atualizar o Lucide; a instalação não roda isto):
   python3 -m venv /tmp/v && /tmp/v/bin/pip install picosvg
-  /tmp/v/bin/python fedora/doxia/lucide/vendor.py <pasta do pacote lucide-static>
+  /tmp/v/bin/python lib/lucide/vendor.py <pasta do pacote lucide-static>
 
 Gera, ao lado deste arquivo:
   svg/<id>.svg       o ícone em traço (stroke="currentColor"); make-theme pinta

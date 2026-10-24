@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # doxia:summary=Check whether DoxIA updates are available.
-# Fedora port: doxia-update-check reads dnf, Flatpak and the DoxIA checkout;
-# this keeps the old one-line-per-update output and exit status.
+# doxia-update-check compares the image and asks Flathub; this keeps the old
+# one-line-per-update output and exit status.
 
 set -euo pipefail
 
@@ -13,8 +13,7 @@ fi
 
 jq -r '
   (if .staged.pending then "Update downloaded, waiting for the reboot" else empty end),
-  (if (.system | length) > 0 then "\(.system | length) system package(s)" else empty end),
+  (if (.system | length) > 0 then "New DoxIA image (\(.system[0].to))" else empty end),
   (if (.flatpak.apps | length) > 0 then "\(.flatpak.apps | length) Flatpak app(s)" else empty end),
-  (if .flatpak.runtimes > 0 then "\(.flatpak.runtimes) Flatpak runtime(s)" else empty end),
-  (if .doxia.behind > 0 then "doxia-dev-checkout \(.doxia.behind) new \(if .doxia.behind == 1 then "commit" else "commits" end) on \(.doxia.upstream)" else empty end)
+  (if .flatpak.runtimes > 0 then "\(.flatpak.runtimes) Flatpak runtime(s)" else empty end)
 ' <<<"$status"

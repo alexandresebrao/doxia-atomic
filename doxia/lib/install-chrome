@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Google Chrome as DoxIA's browser (the image carries the package): what
+# doxia-install-browser chrome does for the user (Wayland flags, Copy URL and yt-dlp
+# extensions) and Chrome as the default browser unless one is already picked.
+#
+# No managed policy directory for Chrome: a color set by policy always gets a light
+# frame. The theme reaches Chrome through its profile instead, written by
+# lib/chrome/google-chrome-stable before each start.
+#
+#   lib/install-chrome   # as the user (doxia-setup-user)
+
+set -euo pipefail
+
+doxia_path=${DOXIA_PATH:-/usr/share/doxia}
+
+if (( EUID == 0 )); then
+  echo "Run as your user, not root." >&2
+  exit 1
+fi
+
+mkdir -p "$HOME/.config"
+cp -f "$doxia_path/config/chromium-flags.conf" "$HOME/.config/chrome-flags.conf"
+# Chrome on GTK 4, so its frame is dark under a dark theme.
+bash "$doxia_path/lib/chrome/install-desktop" "$doxia_path"
+doxia-install-chromium-copy-url
+doxia-install-chromium-ytdlp
+
+# Only when no browser was picked by hand (Setup > Defaults > Browser writes this file).
+if ! grep -qs '^x-scheme-handler/https=' "$HOME/.config/mimeapps.list"; then
+  env -u BROWSER xdg-settings set default-web-browser google-chrome.desktop
+fi

@@ -2,7 +2,7 @@
 # make-shell-font troca esses glifos pelo desenho do Lucide numa cópia da fonte
 # monospace que só o doxia-shell usa (barra, painéis, menus). Logos de marcas e
 # de linguagens ficam de fora, como os glifos da fonte doxia (E900…).
-# "extra:<id>" usa fedora/doxia/lucide/extra/<id>.svg: logos no estilo do
+# "extra:<id>" usa lib/lucide/extra/<id>.svg: logos no estilo do
 # Lucide, do Tabler Icons (o Spotify sólido destoava).
 E302	cloud-sun	weather-day_cloudy
 E308	cloud-sun-rain	weather-day_rain

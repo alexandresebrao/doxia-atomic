@@ -1,0 +1,16 @@
+# The per-user DoxIA setup (lib/setup-user) on an account's first login, before
+# the session starts; the installer already ran it for the account it created.
+# On later logins it only retries the downloads that failed.
+[Unit]
+Description=DoxIA: set up this account
+Before=graphical-session-pre.target
+ConditionEnvironment=XDG_CURRENT_DESKTOP=mango:wlroots
+
+[Service]
+Type=oneshot
+Environment=DOXIA_PATH=/usr/share/doxia
+ExecStart=/usr/share/doxia/lib/setup-user
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=graphical-session-pre.target

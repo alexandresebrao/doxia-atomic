@@ -3,7 +3,7 @@
 # doxia:summary=Succeed when doxia-shell does everything Quickshell did
 # doxia:hidden=true
 
-# From 0.10.0 doxia-shell (fedora/doxia/rs/shell) lists "shell": it draws
+# From 0.10.0 doxia-shell (rs/shell) lists "shell": it draws
 # everything Quickshell did (the bar and idle timers were last, in 0.9.0) and
 # answers the shell's own calls (ping, applyTheme), so Quickshell no longer
 # starts. Without it (an install that couldn't download it, say), or with an

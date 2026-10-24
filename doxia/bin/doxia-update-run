@@ -50,7 +50,7 @@ case "${1:-}" in
     [[ -p $fifo ]] && printf '\n' > "$fifo"
     ;;
   cancel-staged)
-    pkexec "$DOXIA_PATH/bin/doxia-update-offline" cancel
+    pkexec /usr/bin/doxia-update-image cancel
     doxia-update-check >/dev/null || true
     doxia-shell-call -q doxia.system-update refresh
     ;;

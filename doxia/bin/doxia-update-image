@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# doxia:summary=Download and stage the newest DoxIA image (bootc)
+# doxia:args=[staged|cancel|diff]
+# doxia:requires-sudo=true
+# doxia:hidden=true
+
+# (none)  bootc upgrade: pull the image the system tracks and stage it for
+#         the next boot. From the update window (DOXIA_UPDATE_GUI) the layers
+#         move the step's progress bar.
+# staged  exit 0 while a new image waits for the reboot
+# cancel  drop the staged image (as root: pkexec from doxia-update-run)
+# diff    the packages the staged image changes, one "name from → to" per line
+
+set -euo pipefail
+
+staged_deployment() {
+  rpm-ostree status --json 2>/dev/null | jq -e '.deployments[] | select(.staged == true)' >/dev/null
+}
+
+case ${1:-} in
+  staged)
+    staged_deployment
+    exit
+    ;;
+  cancel)
+    (( EUID == 0 )) || { echo "Run as root." >&2; exit 1; }
+    rpm-ostree cleanup --pending
+    exit
+    ;;
+  diff)
+    # rpm-ostree db diff compares the booted deployment with the staged one.
+    staged_deployment || exit 0
+    rpm-ostree db diff 2>/dev/null | awk '
+      /^Upgraded:|^Downgraded:/ { section = "up"; next }
+      /^Added:/ { section = "add"; next }
+      /^Removed:/ { section = "rm"; next }
+      /^[^ ]/ { section = ""; next }
+      section == "up" && $3 == "->" { print $1 " " $2 " → " $4 }
+      section == "add" { print $1 " → " $2 }
+      section == "rm" { print $1 " " $2 " → (removido)" }'
+    exit
+    ;;
+esac
+
+echo -e "\e[32m\nDownload the new DoxIA image\e[0m"
+if [[ -z ${DOXIA_UPDATE_GUI:-} ]]; then
+  sudo bootc upgrade
+  exit
+fi
+
+# bootc prints "layers: 3/12" style lines while fetching; without them the
+# bar just waits for the step to finish.
+sudo bootc upgrade 2>&1 | {
+  last=-1
+  while IFS= read -r line; do
+    echo "$line"
+    if [[ $line =~ ([0-9]+)/([0-9]+) ]] && (( BASH_REMATCH[2] > 0 )); then
+      pct=$(( 100 * BASH_REMATCH[1] / BASH_REMATCH[2] ))
+      if (( pct != last )); then
+        last=$pct
+        doxia-update-state frac system "$(awk -v p="$pct" 'BEGIN { print p / 100 }')" \
+          "camada ${BASH_REMATCH[1]} de ${BASH_REMATCH[2]}"
+      fi
+    fi
+  done
+}
+exit "${PIPESTATUS[0]}"

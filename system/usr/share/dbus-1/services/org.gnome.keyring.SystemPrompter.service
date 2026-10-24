@@ -1,0 +1,5 @@
+# gnome-keyring's password window in the DoxIA style instead of GNOME's
+# gcr-prompter (lib/keyring-prompter).
+[D-BUS Service]
+Name=org.gnome.keyring.SystemPrompter
+Exec=/usr/share/doxia/lib/keyring-prompter

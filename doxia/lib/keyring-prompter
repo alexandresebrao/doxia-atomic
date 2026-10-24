@@ -3,7 +3,7 @@
 
 Same look as sudo-gui-askpass (GTK4 + libadwaita, follows the DoxIA theme).
 gnome-keyring-daemon asks for passwords through the D-Bus name
-org.gnome.keyring.SystemPrompter; fedora/doxia/install-keyring-prompter points that
+org.gnome.keyring.SystemPrompter; lib/install-keyring-prompter points that
 name here (~/.local/share/dbus-1/services, which beats the system's gcr-prompter).
 
 Speaks gcr's prompter protocol (org.gnome.keyring.internal.Prompter) itself:

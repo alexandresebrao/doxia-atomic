@@ -5,7 +5,7 @@
 # (default browser) all start Chrome through this file. Regenerated from the
 # package's own file each time, so new actions in it come along.
 #
-#   bash fedora/doxia/chrome/install-desktop <checkout>
+#   bash lib/chrome/install-desktop <checkout>
 
 set -euo pipefail
 
@@ -16,5 +16,5 @@ dest=$HOME/.local/share/applications/google-chrome.desktop
 [[ -f $source ]] || exit 0
 
 mkdir -p "$(dirname "$dest")"
-sed "s|^Exec=/usr/bin/google-chrome-stable|Exec=$doxia_path/fedora/doxia/chrome/google-chrome-stable|" "$source" >"$dest"
+sed "s|^Exec=/usr/bin/google-chrome-stable|Exec=$doxia_path/lib/chrome/google-chrome-stable|" "$source" >"$dest"
 update-desktop-database -q "$(dirname "$dest")" 2>/dev/null || true

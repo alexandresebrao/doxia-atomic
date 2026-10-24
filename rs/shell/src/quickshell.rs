@@ -4,7 +4,7 @@
 // from loading. Quickshell, which watches the file, unloads a running one but
 // may keep its bus name until it restarts, so doxia-shell waits in line and
 // retries rather than restarting it (doxia-restart-shell can lock the
-// session). fedora/doxia/apply-bar takes the entries back out on machines
+// session). lib/apply-bar takes the entries back out on machines
 // without doxia-shell.
 
 use serde_json::Value;

@@ -50,7 +50,7 @@ use std::rc::Rc;
 fn main() -> glib::ExitCode {
   // The lock screen's PAM child (lock/pam.rs), before any GTK.
   let args: Vec<String> = std::env::args().collect();
-  // What this build takes over from Quickshell, for fedora/doxia/apply-bar
+  // What this build takes over from Quickshell, for lib/apply-bar
   // (builds before 0.7.0 reject the option).
   if args.get(1).map(String::as_str) == Some("--features") {
     println!("notifications polkit lock menu iniciar clipboard emojis image-picker reminders battery background bar idle shell");

@@ -1,0 +1,66 @@
+# Builds the DoxIA image and publishes it to ghcr.io/alexandresebrao/doxia,
+# signed with cosign. Installed machines follow :latest with bootc upgrade.
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Daily, to pick up Fedora and Universal Blue updates
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/doxia
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+
+      - name: Build
+        id: build
+        uses: redhat-actions/buildah-build@v2
+        with:
+          image: doxia
+          tags: latest ${{ github.sha }} 44-${{ github.run_number }}
+          containerfiles: ./Containerfile
+          oci: true
+          layers: true
+
+      - name: Log in to ghcr.io
+        if: github.event_name != 'pull_request'
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push
+        id: push
+        if: github.event_name != 'pull_request'
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build.outputs.image }}
+          tags: ${{ steps.build.outputs.tags }}
+          registry: ghcr.io/${{ github.repository_owner }}
+
+      - uses: sigstore/cosign-installer@v3
+        if: github.event_name != 'pull_request'
+
+      - name: Sign
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+        run: |
+          [[ -n $COSIGN_PRIVATE_KEY ]] || { echo "No SIGNING_SECRET: image left unsigned"; exit 0; }
+          cosign sign -y --key env://COSIGN_PRIVATE_KEY "$IMAGE@${{ steps.push.outputs.digest }}"

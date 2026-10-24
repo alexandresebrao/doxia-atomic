@@ -1,8 +1,0 @@
-#!/bin/bash
-
-# doxia:summary=Ensure package signing keys are in place before updating
-# doxia:requires-sudo=true
-# Fedora port: dnf imports repo GPG keys itself when a repo first needs them,
-# so there is no separate keyring package to refresh as on Arch.
-
-exit 0

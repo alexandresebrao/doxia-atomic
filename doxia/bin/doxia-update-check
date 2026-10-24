@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-# doxia:summary=List what an update would change: dnf packages, Flatpak apps and DoxIA commits
+# doxia:summary=List what an update would change: the DoxIA image and Flatpak apps
 # doxia:args=[--refresh] [--cached]
 # doxia:examples=doxia update check | doxia update check --refresh
 
@@ -8,8 +8,12 @@
 for the update window and the bar icon. Exits 0 when there is something to do
 (including an update downloaded and waiting for the reboot), 1 otherwise.
 
-  --refresh  make dnf download fresh repository metadata first
+  --refresh  accepted for compatibility: the registry is always asked
   --cached   print the last summary without checking again
+
+The system part compares the image the machine booted (rpm-ostree status)
+with the newest one in the registry (skopeo inspect): one entry when the
+registry has a newer image, none when it is the same.
 """
 
 import json
@@ -21,10 +25,6 @@ import time
 from pathlib import Path
 
 CACHE = Path.home() / ".cache/doxia/update-status.json"
-STAGED = Path("/var/lib/doxia/update-staged.json")
-FINISH_PENDING = Path("/var/lib/doxia/update-finish-pending")
-DOXIA_PATH = os.environ.get("DOXIA_PATH", "")
-PKG_LINE = re.compile(r"^(\S+)\.(\w+)\s+(\S+)\s+(\S+)\s*$")
 
 
 def run(cmd, timeout=180):
@@ -35,27 +35,55 @@ def run(cmd, timeout=180):
         return -1, ""
 
 
-def system_updates(refresh, errors):
-    cmd = ["dnf", "-q", "check-update"] + (["--refresh"] if refresh else [])
-    code, out = run(cmd)
-    if code not in (0, 100):
-        errors.append("Não foi possível consultar os repositórios do dnf.")
+def deployments():
+    code, out = run(["rpm-ostree", "status", "--json"], 30)
+    if code != 0:
         return []
-    pkgs, section = [], "Upgrades"
-    for line in out.splitlines():
-        if line and not line[0].isspace() and " " not in line.strip():
-            section = line.strip()
-            continue
-        m = PKG_LINE.match(line)
-        if m and section == "Upgrades":
-            pkgs.append({"name": m[1], "arch": m[2], "to": m[3], "repo": m[4], "from": ""})
-    if pkgs:
-        code, out = run(["rpm", "-q", "--qf", "%{NAME}.%{ARCH} %{VERSION}-%{RELEASE}\n"] +
-                        [f"{p['name']}.{p['arch']}" for p in pkgs], timeout=30)
-        installed = dict(line.split(" ", 1) for line in out.splitlines() if " " in line)
-        for p in pkgs:
-            p["from"] = installed.get(f"{p['name']}.{p['arch']}", "")
-    return pkgs
+    try:
+        return json.loads(out).get("deployments", [])
+    except ValueError:
+        return []
+
+
+def image_label(info, *keys):
+    labels = info.get("Labels") or {}
+    for key in keys:
+        if labels.get(key):
+            return labels[key]
+    return ""
+
+
+def image_ref(reference):
+    """bootc's image reference as skopeo takes it:
+    ostree-unverified-registry:ghcr.io/x:latest      -> docker://ghcr.io/x:latest
+    ostree-remote-registry:fedora:ghcr.io/x:latest   -> docker://ghcr.io/x:latest
+    ostree-image-signed:docker://ghcr.io/x:latest    -> docker://ghcr.io/x:latest"""
+    if "docker://" in reference:
+        return "docker://" + reference.split("docker://", 1)[1]
+    if reference.startswith("ostree-remote-registry:"):
+        return "docker://" + reference.split(":", 2)[2]
+    return "docker://" + reference.split(":", 1)[1]
+
+
+def system_updates(errors):
+    booted = next((d for d in deployments() if d.get("booted")), None)
+    if not booted or not booted.get("container-image-reference"):
+        errors.append("O sistema não segue uma imagem do DoxIA (bootc).")
+        return []
+    ref = image_ref(booted["container-image-reference"])
+    code, out = run(["skopeo", "inspect", "--no-tags", ref], 60)
+    if code != 0:
+        errors.append("Não foi possível consultar o registro de imagens do DoxIA.")
+        return []
+    try:
+        remote = json.loads(out)
+    except ValueError:
+        return []
+    if remote.get("Digest") == booted.get("container-image-reference-digest"):
+        return []
+    to = image_label(remote, "org.opencontainers.image.version") or remote.get("Created", "")[:10]
+    return [{"name": "DoxIA", "arch": remote.get("Architecture", ""), "repo": ref.removeprefix("docker://"),
+             "from": booted.get("version") or "", "to": to}]
 
 
 def flatpak_updates(errors):
@@ -74,42 +102,14 @@ def flatpak_updates(errors):
     return {"apps": apps, "runtimes": runtimes}
 
 
-def doxia_updates():
-    info = {"behind": 0, "upstream": "", "head": "", "commits": []}
-    if not DOXIA_PATH or DOXIA_PATH == "/usr/share/doxia":
-        return info
-    git = ["git", "-C", DOXIA_PATH]
-    _, upstream = run(git + ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], 10)
-    _, head = run(git + ["rev-parse", "--short", "HEAD"], 10)
-    info["upstream"], info["head"] = upstream.strip(), head.strip()
-    if not info["upstream"]:
-        return info
-    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
-    try:
-        subprocess.run(git + ["fetch", "--quiet"], env=env, timeout=20, capture_output=True)
-    except (OSError, subprocess.TimeoutExpired):
-        pass
-    _, log = run(git + ["log", "--format=%s", f"HEAD..{info['upstream']}"], 10)
-    info["commits"] = [line for line in log.splitlines() if line]
-    info["behind"] = len(info["commits"])
-    return info
-
-
 def staged():
-    pending = os.path.islink("/system-update") or FINISH_PENDING.exists()
-    data = {"pending": pending, "packages": [], "stagedAt": 0, "finishing": FINISH_PENDING.exists()}
-    if pending:
-        try:
-            saved = json.loads(STAGED.read_text())
-            data["packages"] = saved.get("packages", [])
-            data["stagedAt"] = saved.get("stagedAt", 0)
-        except (OSError, ValueError):
-            pass
+    stage = next((d for d in deployments() if d.get("staged")), None)
+    data = {"pending": stage is not None, "packages": [], "stagedAt": 0, "finishing": False}
+    if stage:
+        data["stagedAt"] = stage.get("timestamp", 0)
+        _, out = run(["doxia-update-image", "diff"], 60)
+        data["packages"] = [line for line in out.splitlines() if line]
     return data
-
-
-def snapper_present():
-    return any(Path(d, "snapper").exists() for d in os.environ.get("PATH", "/usr/bin").split(":"))
 
 
 def main(args):
@@ -123,12 +123,14 @@ def main(args):
         stage = staged()
         status = {
             "checkedAt": int(time.time()),
-            # A stored offline transaction already holds the system updates.
-            "system": [] if stage["pending"] else system_updates("--refresh" in args, errors),
+            # A staged image already holds the system update.
+            "system": [] if stage["pending"] else system_updates(errors),
             "flatpak": flatpak_updates(errors),
-            "doxia": doxia_updates(),
+            # DoxIA itself is part of the image: no checkout to follow.
+            "doxia": {"behind": 0, "upstream": "", "head": "", "commits": []},
             "staged": stage,
-            "snapper": snapper_present(),
+            # The previous image is the rollback: no snapshots needed.
+            "snapper": False,
             "errors": errors,
         }
         CACHE.parent.mkdir(parents=True, exist_ok=True)
@@ -138,7 +140,7 @@ def main(args):
 
     print(json.dumps(status))
     pending = (status["system"] or status["flatpak"]["apps"] or status["flatpak"]["runtimes"]
-               or status["doxia"]["behind"] or status["staged"]["pending"])
+               or status["staged"]["pending"])
     sys.exit(0 if pending else 1)
 
 

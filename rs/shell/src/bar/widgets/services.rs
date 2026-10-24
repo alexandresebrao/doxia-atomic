@@ -1,4 +1,4 @@
-// doxia.services (fedora/doxia/plugins/doxia.services): the development
+// doxia.services (lib/plugins/doxia.services): the development
 // services of ~/.config/doxia/services.json, run by the plugin's `svc`
 // script as transient user units. The icon is dim while none runs, pulses
 // while one is busy, and carries a red dot when one fell or its build
@@ -18,7 +18,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 fn svc() -> String {
-  format!("{}/fedora/doxia/plugins/doxia.services/svc", std::env::var("DOXIA_PATH").unwrap_or_default())
+  format!("{}/lib/plugins/doxia.services/svc", std::env::var("DOXIA_PATH").unwrap_or_default())
 }
 
 pub fn uptime(seconds: f64) -> String {

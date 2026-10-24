@@ -1,4 +1,4 @@
-// The Start menu's data, from fedora/doxia/plugins/doxia.iniciar/IniciarModel.js:
+// The Start menu's data, from lib/plugins/doxia.iniciar/IniciarModel.js:
 // the Programs folders by XDG category and the recent documents GTK and
 // Nautilus keep in ~/.local/share/recently-used.xbel.
 

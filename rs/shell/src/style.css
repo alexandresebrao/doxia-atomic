@@ -121,7 +121,7 @@ window.menu-window { background: $MENU_SCRIM; }
 .popup-confirm-button.selected { background: $MENU_SEL_BG; color: $MENU_SEL_TEXT; }
 .popup-confirm-button.destructive.selected { background: alpha($URGENT, 0.35); }
 
-/* The Start menu, like fedora/doxia/plugins/doxia.iniciar/Iniciar.qml: the
+/* The Start menu, like lib/plugins/doxia.iniciar/Iniciar.qml: the
    menu's colors in Windows 98 relief: the theme border, a light top/left and
    dark bottom/right edge, then a mid one, no rounding. */
 window.iniciar-window { background: transparent; }

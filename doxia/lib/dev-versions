@@ -6,9 +6,9 @@ uses), installs and removes versions, and installs a JDK from a file (a zip,
 tar.gz, tgz, tar.xz, tar.bz2, tar.zst, tar.Z or rpm, like Oracle's) or from an
 already extracted folder. nvm and SDKMAN! are shell functions, so every change
 runs them in a bash that loads them, the same way ~/.bashrc.d/dev-tools.sh does.
-fedora/doxia/install-dev-tools installs both and this window's launcher.
+lib/install-dev-tools installs both and this window's launcher.
 
-  python3 fedora/doxia/dev-versions
+  python3 lib/dev-versions
 """
 import os
 import re
@@ -593,7 +593,7 @@ class Window(Adw.ApplicationWindow):
 
     def missing(self, tool):
         return Adw.StatusPage(icon_name="dialog-warning-symbolic", title=f"O {tool} não está instalado",
-                              description="Instale com: bash ~/.local/share/doxia/fedora/doxia/install-dev-tools")
+                              description="Instale com: bash /usr/share/doxia/lib/install-dev-tools")
 
     def pages(self):
         return [page for page in (self.node, self.java) if page]

@@ -1,4 +1,4 @@
-// The Start menu, replacing fedora/doxia/plugins/doxia.iniciar (Iniciar.qml):
+// The Start menu, replacing lib/plugins/doxia.iniciar (Iniciar.qml):
 // Windows 98 style in the theme's menu colors, a vertical "DoxIA" banner,
 // relief edges and cascading submenus that open on hover. Typing anywhere
 // goes to Localizar; Executar... runs a command. Opened with
