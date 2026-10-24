@@ -9,9 +9,10 @@ Estado em 2026-10-23, logo depois de importar a v1 (`build/v1/IMPORTED_FROM`).
   como unit global, `doxia-setup-user.service` antes da sessão.
 - ISO: o kickstart com `ostreecontainer`, o `%post` rodando
   `lib/setup-user` dentro da implantação, o caminho do log que o assistente
-  lê (`/mnt/sysroot/ostree/deploy/default/var/log/doxia-install.log`) e as
-  mensagens de progresso do Anaconda ao baixar a imagem (o mapeamento em
-  `on_progress` foi feito para pacotes RPM).
+  lê (`/mnt/sysroot/ostree/deploy/default/var/log/doxia-install.log`) e a
+  barra do download (bytes recebidos pela rede contra o tamanho das camadas
+  no registry, porque o `ostree container image deploy` não informa
+  progresso ao Anaconda).
 - Atualizar com bootc: os campos de `rpm-ostree status --json`
   (`container-image-reference`, `-digest`, `staged`), o formato da saída de
   `bootc upgrade` para a barra de progresso e o texto de `rpm-ostree db diff`.

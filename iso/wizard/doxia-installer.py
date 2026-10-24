@@ -20,6 +20,9 @@ import sys
 import threading
 import time
 import unicodedata
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 import gi
@@ -35,6 +38,11 @@ DEMO = bool(os.environ.get("DOXIA_DEMO"))
 STATE = Path(os.environ.get("DOXIA_STATE", "/tmp/doxia"))
 SYSROOT = Path("/mnt/sysroot")
 BUS_ADDRESS = Path("/run/anaconda/bus.address")
+# The kickstart Anaconda loaded, for the image the ostreecontainer line pulls
+KICKSTART = Path("/run/install/ks.cfg")
+DEFAULT_IMAGE = "ghcr.io/alexandresebrao/doxia-atomic:latest"
+# The deployment ostree checks out once the image is in the repo
+DEPLOY_DIR = SYSROOT / "ostree/deploy/default/deploy"
 TASK_IFACE = "org.fedoraproject.Anaconda.Task"
 LICENSE = HERE / "LICENCA.txt"
 VERSION = os.environ.get("DOXIA_VERSION", "44")
@@ -200,6 +208,71 @@ def wifi_connect(ssid, password):
     return err[-1].removeprefix("Error: ") if err else "Não foi possível conectar."
 
 
+def image_ref():
+    try:
+        m = re.search(r"^ostreecontainer\b.*--url[= ](\S+)", KICKSTART.read_text(), re.M)
+    except OSError:
+        m = None
+    return m.group(1) if m else DEFAULT_IMAGE
+
+
+MANIFEST_TYPES = ", ".join([
+    "application/vnd.oci.image.index.v1+json",
+    "application/vnd.oci.image.manifest.v1+json",
+    "application/vnd.docker.distribution.manifest.list.v2+json",
+    "application/vnd.docker.distribution.manifest.v2+json",
+])
+
+
+def image_size(ref):
+    """Bytes the image's layers weigh in the registry: what the install downloads."""
+    if DEMO:
+        return 4_300_000_000
+    host, _, rest = ref.partition("/")
+    name, tag = rest.rsplit(":", 1) if ":" in rest.rsplit("/", 1)[-1] else (rest, "latest")
+    headers = {"Accept": MANIFEST_TYPES}
+
+    def get(path):
+        request = urllib.request.Request(f"https://{host}/v2/{name}/{path}", headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=15) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            # Anonymous pull token, as the registry's challenge describes it
+            challenge = e.headers.get("WWW-Authenticate", "")
+            if e.code != 401 or "Authorization" in headers or not challenge.startswith("Bearer"):
+                raise
+            params = dict(re.findall(r'(\w+)="([^"]*)"', challenge))
+            query = urllib.parse.urlencode({k: params[k] for k in ("service", "scope") if k in params})
+            with urllib.request.urlopen(f"{params['realm']}?{query}", timeout=15) as r:
+                token = json.load(r)
+            headers["Authorization"] = "Bearer " + (token.get("token") or token["access_token"])
+            return get(path)
+
+    manifest = get(f"manifests/{tag}")
+    if "manifests" in manifest:
+        arch = {"x86_64": "amd64", "aarch64": "arm64"}.get(os.uname().machine, os.uname().machine)
+        digest = next(m["digest"] for m in manifest["manifests"]
+                      if m.get("platform", {}).get("architecture") == arch)
+        manifest = get(f"manifests/{digest}")
+    return sum(layer["size"] for layer in manifest["layers"])
+
+
+def received_bytes():
+    total = 0
+    for stats in Path("/sys/class/net").glob("*/statistics/rx_bytes"):
+        if stats.parts[-3] != "lo":
+            try:
+                total += int(stats.read_text())
+            except (OSError, ValueError):
+                pass
+    return total
+
+
+def gigabytes(n):
+    return f"{n / 1e9:.1f}".replace(".", ",") + " GB"
+
+
 def signal_words(percent):
     return "Excelente" if percent >= 75 else "Bom" if percent >= 50 else "Regular" if percent >= 30 else "Fraco"
 
@@ -244,6 +317,11 @@ class Wizard(Gtk.Window):
         self.started_at = None
         self.fraction = 0.0
         self.phase_floor = 0.0
+        self.image_bytes = None  # filled in by a thread once the install starts
+        self.rx_start = 0
+        self.rx_samples = []  # (time, bytes) of the last seconds, for the speed
+        self.demo_rx = 0
+        self.demo_deployed = False
         self.task_steps = {}
         self.bus = None
         self.current = None
@@ -629,9 +707,7 @@ class Wizard(Gtk.Window):
 
     def _page_done(self):
         box = self.page("Concluindo a instalação",
-                        "O DoxIA foi instalado. Remova o pendrive ou o DVD e clique em Reiniciar.\n\n"
-                        "Depois de reiniciar, o DoxIA instala as atualizações mais recentes antes da tela "
-                        "de login. Isso leva alguns minutos: não desligue o computador.")
+                        "O DoxIA foi instalado. Remova o pendrive ou o DVD e clique em Reiniciar.")
         return box
 
     def _page_failed(self):
@@ -1063,6 +1139,8 @@ class Wizard(Gtk.Window):
         self.started_at = time.time()
         self.go("copy")
         self.set_progress(0.01)
+        self.rx_start = received_bytes()
+        threading.Thread(target=self.fetch_image_size, daemon=True).start()
         GLib.timeout_add_seconds(15, self.next_tip)
         GLib.timeout_add(1000, self.tick)
         if DEMO:
@@ -1093,25 +1171,36 @@ class Wizard(Gtk.Window):
     last_message = ""
 
     def on_progress(self, path, step, message):
-        """Map Anaconda's messages to one bar: download 4-40%, packages 40-80%, setup 80-99%."""
+        """Anaconda's own messages: storage and bootloader. The image download
+        sends none (ostree container image deploy), so tick() measures it."""
         if not message:
             return
         self.last_message = message
-        downloaded = re.search(r"\((\d+)%\)", message)
-        installed = re.search(r"\((\d+)/(\d+)\)\s*$", message)
-        if downloaded:
-            self.set_status("Baixando os pacotes", message)
-            self.set_progress(0.04 + 0.36 * int(downloaded.group(1)) / 100)
-        elif installed:
-            n, total = int(installed.group(1)), int(installed.group(2))
-            name = message[:installed.start()].split()[-1] if message[:installed.start()].split() else ""
-            self.set_status(f"Instalando pacotes ({n} de {total}):", name)
-            self.set_progress(0.40 + 0.40 * n / max(1, total))
-        elif self.fraction >= 0.79:
-            self.set_status("Configurando o sistema", message)
-            self.set_progress(max(self.fraction, 0.80))
-        else:
+        if self.fraction < 0.04:
             self.set_status(message, " ")
+
+    def fetch_image_size(self):
+        try:
+            size = image_size(image_ref())
+        except (OSError, ValueError, KeyError, StopIteration):
+            return  # the bar then counts what arrived, without a percentage
+        GLib.idle_add(setattr, self, "image_bytes", size)
+
+    def downloaded(self):
+        """Bytes received since the install started, and the speed over the last 5 s."""
+        now = time.time()
+        got = self.demo_rx if DEMO else received_bytes() - self.rx_start
+        self.rx_samples = [(t, b) for t, b in self.rx_samples if now - t <= 5] + [(now, got)]
+        t0, b0 = self.rx_samples[0]
+        return got, (got - b0) / (now - t0) if now > t0 else 0.0
+
+    def deployed(self):
+        if DEMO:
+            return self.demo_deployed
+        try:
+            return any(DEPLOY_DIR.iterdir())
+        except OSError:
+            return False
 
     def set_status(self, status, detail):
         self.copy_status.set_text(status)
@@ -1151,15 +1240,39 @@ class Wizard(Gtk.Window):
             here, nxt = (0.82 + 0.17 * (1 - 0.92 ** i) for i in (k, k + 1))
             self.set_status("Configurando o DoxIA", detail)
             self.set_progress(here + (nxt - here) * done)
-        elif self.fraction >= 0.80:
-            self.set_progress(self.fraction + (0.99 - self.fraction) * 0.002)
-        elif self.fraction < 0.04:
-            self.set_progress(self.fraction + 0.0005)
+        elif self.deployed():
+            # bootloader and SELinux labels, then the %post log takes over
+            self.set_status("Configurando o sistema", self.last_message)
+            self.set_progress(max(self.fraction, 0.78) + (0.82 - max(self.fraction, 0.78)) * 0.01)
+        else:
+            got, speed = self.downloaded()
+            total = self.image_bytes
+            if got < 20_000_000 and self.fraction < 0.04:
+                self.set_progress(self.fraction + 0.0005)  # still partitioning
+            elif total and got < total * 0.99:
+                self.set_status("Baixando o DoxIA",
+                                f"{gigabytes(got)} de {gigabytes(total)} · {speed / 1e6:.1f} MB/s".replace(".", ","))
+                self.set_progress(0.04 + 0.68 * got / total)
+            elif total:
+                # the last layers are unpacked into the repository, then checked out
+                self.set_status("Gravando o DoxIA no disco", "Descompactando a imagem baixada")
+                self.set_progress(max(self.fraction, 0.72) + (0.78 - max(self.fraction, 0.72)) * 0.01)
+            else:
+                self.set_status("Baixando o DoxIA", f"{gigabytes(got)} · {speed / 1e6:.1f} MB/s".replace(".", ","))
+                self.set_progress(self.fraction + (0.72 - self.fraction) * 0.002)
+            self.update_eta(got, speed)
+            return True
         self.update_eta()
         return True
 
-    def update_eta(self):
+    def update_eta(self, got=None, speed=0.0):
         elapsed = time.time() - self.started_at
+        if got is not None and self.image_bytes and speed > 100_000 and got < self.image_bytes:
+            # what is left to download, plus ~8 min to unpack and set up the account
+            remaining = (self.image_bytes - got) / speed + 8 * 60
+            minutes = max(1, round(remaining / 60))
+            self.eta.set_text(f"{minutes} minutos")
+            return
         if self.fraction < 0.08 or elapsed < 60:
             self.eta.set_text("30 a 45 minutos")
             return
@@ -1195,19 +1308,16 @@ class Wizard(Gtk.Window):
             GLib.idle_add(self.on_progress, "/demo", step, msg)
         emit(1, "Configurando o armazenamento")
         time.sleep(2)
-        for p in range(0, 101, 5):
-            emit(5, f"Baixando 1430 RPMs, {p * 9.1:.1f} MB / 910.0 MB ({p}%) done.")
-            time.sleep(0.3)
-        for n in range(1, 1431, 37):
-            emit(6, f"Instalando hyprland-0.56.0-1.fc44.x86_64 ({n}/1430)")
-            time.sleep(0.15)
+        emit(4, "Deployment starting: " + DEFAULT_IMAGE)
+        while self.demo_rx < 4_300_000_000:
+            self.demo_rx += 150_000_000
+            time.sleep(0.5)
+        time.sleep(4)
+        self.demo_deployed = True
         emit(9, "Instalando o carregador de inicialização")
-        time.sleep(2)
-        emit(20, "Executando scripts de pós-instalação")
         time.sleep(4)
         STATE.mkdir(parents=True, exist_ok=True)
         (STATE / "installed").touch()
-
 
 def main():
     settings = Gtk.Settings.get_default()
