@@ -26,6 +26,8 @@ if [[ -n $opt ]]; then
   rmdir /opt
   ln -s "$opt" /opt
 fi
+# Straight to the image's copy, so the command works before tmpfiles runs.
+ln -sfn /usr/lib/google/chrome/google-chrome /usr/bin/google-chrome-stable
 # The package's cron job rewrites the repo file on a running system; the image
 # owns it.
 rm -f /etc/cron.daily/google-chrome

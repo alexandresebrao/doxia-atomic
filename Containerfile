@@ -15,7 +15,7 @@ ARG FEDORA=44
 FROM registry.fedoraproject.org/fedora:${FEDORA} AS rs
 RUN dnf install -y --setopt=install_weak_deps=False \
       cargo rust gcc pkgconf-pkg-config jq \
-      gtk4-devel gtk4-layer-shell-devel pango-devel cairo-devel glib2-devel \
+      gtk4-devel gtk4-layer-shell-devel pango-devel cairo-devel glib2-devel pam-devel \
     && dnf clean all
 COPY rs /src
 WORKDIR /src
