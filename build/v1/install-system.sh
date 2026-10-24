@@ -1,0 +1,263 @@
+#!/bin/bash
+
+# Fedora port of DoxIA: system-level setup (run with sudo).
+# Installs mango + doxia-shell + the DoxIA runtime deps side by side with KDE.
+# Nothing here removes or reconfigures KDE/Plasma.
+
+set -euo pipefail
+
+if (( EUID != 0 )); then
+  echo "Run with sudo: sudo bash $0" >&2
+  exit 1
+fi
+
+target_user=${SUDO_USER:?run through sudo so the target user is known}
+target_home=$(getent passwd "$target_user" | cut -d: -f6)
+doxia_path="$target_home/.local/share/doxia"
+
+if [[ ! -d $doxia_path/bin ]]; then
+  echo "DoxIA checkout not found at $doxia_path" >&2
+  exit 1
+fi
+
+# No COPR: what Fedora doesn't package (mango, scenefx, uwsm,
+# gpu-screen-recorder) comes as DoxIA builds from this repository's releases.
+# dnf-plugins-core for the version locks (install-wlroots, VMware only).
+dnf install -y dnf-plugins-core
+
+echo "==> wlroots (the DoxIA build, on VMware only)"
+# vmwgfx rejects every client DMA-BUF in Fedora's build: black login screen.
+bash "$doxia_path/fedora/doxia/install-wlroots"
+
+echo "==> scenefx (the DoxIA build, from this repository's releases)"
+# Before mango, which requires it. Carries the vmwgfx fallback for the
+# blur/shadow buffers.
+bash "$doxia_path/fedora/doxia/install-scenefx"
+
+echo "==> mango (the DoxIA build, from this repository's releases)"
+bash "$doxia_path/fedora/doxia/install-mango"
+
+echo "==> uwsm, the session manager (the DoxIA build, from this repository's releases)"
+bash "$doxia_path/fedora/doxia/install-uwsm"
+
+echo "==> gpu-screen-recorder (the DoxIA build, from this repository's releases)"
+bash "$doxia_path/fedora/doxia/install-gpu-screen-recorder"
+
+echo "==> DoxIA apps in Rust + GTK 4 (from this repository's releases)"
+# doxia-shell is the shell: without it there is no desktop.
+bash "$doxia_path/fedora/doxia/install-rs"
+
+echo "==> DoxMail, the mail, calendar and contacts app (from this repository's releases)"
+bash "$doxia_path/fedora/doxia/install-doxmail" || echo "  DoxMail not installed; the next update tries again."
+
+echo "==> Installing packages"
+packages=(
+  # Session and portals. mangowm ships mango-portals.conf, which routes screen
+  # sharing and screenshots to the wlr portal.
+  xdg-desktop-portal-wlr xdg-desktop-portal-gtk
+  # Output layout (monitor panel, captures), virtual pointer (capture-region)
+  # and the nightlight
+  wlr-randr wlrctl gammastep
+
+  # doxia-shell's layer surfaces (bar, menus, notifications, OSD, lock)
+  gtk4-layer-shell
+
+  # Terminal + default apps
+  kitty nano nautilus nautilus-python sushi gnome-disk-utility evince-thumbnailer imv mpv mpv-mpris flatpak
+  # Only Yaru's icons: the yaru-theme metapackage pulls in GNOME Shell, GDM and Mutter.
+  # gnome-keyring-pam unlocks the keyring at the login (Chrome's passwords).
+  gnome-keyring gnome-keyring-pam yaru-icon-theme
+  # Red folders of the DoxIA theme (themes/doxia/make-icons.sh) and applying
+  # them without a session (install-user.sh)
+  papirus-icon-theme-dark perl-interpreter dbus-daemon
+  # JSON::PP for the clipboard history capture and doxia-menu-select/-input
+  perl-JSON-PP
+
+  # Wayland/desktop utilities used by doxia-* commands
+  # grim and slurp also make the color picker, over doxia-freeze (doxia-rs)
+  brightnessctl pamixer playerctl wireplumber wl-clipboard wtype grim slurp cliphist
+  libnotify upower udiskie xdg-user-dirs xdg-terminal-exec
+  bluez-tools NetworkManager-tui wiremix
+  # pactl for the doxia-audio-* scripts (volume keys, output/input switching);
+  # tuned-ppd serves the power profiles fedora/bin/powerprofilesctl talks to
+  pulseaudio-utils tuned-ppd
+
+  # CLI toolbox used by DoxIA scripts and TUIs
+  btop fastfetch gum jq socat inotify-tools fzf util-linux-script eza zoxide ripgrep fd-find bat tmux
+  ImageMagick vips-tools ffmpegthumbnailer qrencode zbar tesseract tldr inxi plocate
+  python3-gobject tree-sitter-cli nss-mdns
+  # SDKMAN! (fedora/doxia/install-dev-tools) needs zip and unzip; its window
+  # (fedora/doxia/dev-versions) runs on GTK 4 and libadwaita and unpacks rpm JDKs with cpio
+  zip unzip gtk4 libadwaita cpio
+  # gnome-keyring's password window (fedora/doxia/keyring-prompter) runs on Gcr 4
+  gcr-libs
+  # The first-login screen (fedora/doxia/first-boot) reuses the installer wizard's GTK 3 window
+  gtk3
+  # The DoxIA shell: zsh with Oh My Zsh (fedora/doxia/install-zsh)
+  zsh
+  # Builds the DoxIA Shell font, the shell's icons in Lucide (fedora/doxia/lucide/make-shell-font)
+  python3-fonttools
+  # FortiVPN bar widget (fedora/doxia/plugins/doxia.fortivpn)
+  openfortivpn
+
+  # Fonts
+  google-noto-sans-fonts google-noto-emoji-fonts google-noto-sans-cjk-fonts
+  fontawesome-fonts-all jetbrains-mono-fonts
+)
+dnf install -y --setopt=install_weak_deps=False "${packages[@]}"
+
+# Not every spin enables these presets (the Workstation one does).
+systemctl enable tuned.service tuned-ppd.service
+
+echo "==> Voxtype dictation (RPM from the upstream release; Fedora has no package)"
+# A GitHub hiccup must not fail the whole install: install-user.sh and the next
+# Atualizar try again.
+bash "$doxia_path/fedora/doxia/install-voxtype" --rpm || echo "  Voxtype was not installed; Atualizar will retry."
+
+echo "==> Google Chrome (the default browser; Google's dnf repo)"
+bash "$doxia_path/fedora/doxia/install-chrome" --system || echo "  Chrome was not installed; Atualizar will retry."
+
+# Document viewer, office suite, mail and browser from Flathub instead of the RPMs;
+# evince-thumbnailer above keeps PDF thumbnails in Nautilus. ONLYOFFICE replaces
+# LibreOffice, which Fedora's spins install (removing it also drops the JDK only it
+# needed: java and node come from SDKMAN! and nvm, fedora/doxia/install-dev-tools).
+echo "==> Installing Flatpak apps (Evince, ONLYOFFICE in Brazilian Portuguese, Firefox, LibreWolf)"
+office_rpms=$(rpm -qa --qf '%{NAME}\n' 'libreoffice*' unoconv)
+if [[ -n $office_rpms ]]; then
+  dnf remove -y $office_rpms
+fi
+# Firefox comes from Flathub too. Without clean_requirements_on_remove dnf would
+# also drop what only Firefox's dependents (the live installer) held, openssl and
+# pulseaudio-utils (pactl) among them.
+if rpm -q firefox &>/dev/null; then
+  dnf remove -y --setopt=clean_requirements_on_remove=False firefox firefox-langpacks
+fi
+flatpak_apps=(org.gnome.Evince org.onlyoffice.desktopeditors org.mozilla.firefox io.gitlab.librewolf-community)
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+# Brazilian Portuguese whatever the system's language: ONLYOFFICE takes its interface
+# language from LANG, and ships the pt-BR translation and spell checker itself. Its
+# Qt and GTK default to IBus inside Flatpak, whose portal fails without ibus-daemon
+# (which DoxIA doesn't run) and uwsm's fumon reports that as a failed unit: use
+# their built-in input (dead keys and compose included), as they fall back to anyway.
+flatpak override --system --env=LANG=pt_BR.UTF-8 --env=LANGUAGE=pt_BR \
+  --env=QT_IM_MODULE=compose --env=GTK_IM_MODULE=gtk-im-context-simple org.onlyoffice.desktopeditors
+if systemd-detect-virt --quiet --chroot; then
+  # The installer's chroot can't run bwrap (the install fails after downloading
+  # ~1 GB of runtimes), so the installed system does it on its first boot online.
+  cat > /etc/systemd/system/doxia-flatpak-apps.service <<UNIT
+[Unit]
+Description=DoxIA: install the Flatpak apps the installer could not
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/var/lib/doxia/flatpak-apps-done
+
+[Service]
+Type=oneshot
+StateDirectory=doxia
+ExecStart=/usr/bin/flatpak install -y --noninteractive flathub ${flatpak_apps[*]}
+ExecStartPost=/usr/bin/touch /var/lib/doxia/flatpak-apps-done
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl enable doxia-flatpak-apps.service
+else
+  flatpak install -y --noninteractive flathub "${flatpak_apps[@]}"
+fi
+
+# DoxMail is every user's default mail client (mailto: links, .eml files); it
+# follows the theme (GTK 4 and libadwaita, the gtk-4.0 gtk.css);
+# ~/.config/mimeapps.list still wins for anyone who picks another one.
+install -Dm644 "$doxia_path/fedora/doxia/mimeapps.list" /etc/xdg/mimeapps.list
+
+# Fedora ships tuned-ppd (same D-Bus API as power-profiles-daemon, which conflicts
+# with it) but no powerprofilesctl, which DoxIA's power menu relies on.
+if [[ ! -x /usr/bin/powerprofilesctl ]]; then
+  install -Dm755 "$doxia_path/fedora/bin/powerprofilesctl" /usr/local/bin/powerprofilesctl
+fi
+
+# Theme color in Chromium-family browsers (the helper and its passwordless sudoers rule)
+bash "$doxia_path/fedora/doxia/install-browser-policy" "$doxia_path"
+
+# The touchpad for doxia-shell (the background follows three-finger swipes)
+bash "$doxia_path/fedora/doxia/install-touchpad-access"
+
+# zsh as the login shell (Oh My Zsh and the DoxIA theme: install-user.sh)
+if [[ $(getent passwd "$target_user" | cut -d: -f7) != */zsh ]]; then
+  usermod -s /usr/bin/zsh "$target_user"
+fi
+
+# Boot menu entries titled DoxIA instead of Fedora Linux, for the kernels already
+# installed and every later one (copied: kernel-install runs confined by SELinux).
+install -Dm755 "$doxia_path/fedora/doxia/kernel-install/95-doxia-title.install" \
+  /etc/kernel/install.d/95-doxia-title.install
+/etc/kernel/install.d/95-doxia-title.install retitle
+
+# The DoxIA brand as an image instead of ASCII in terminals that draw images.
+ln -sfn "$doxia_path/fedora/bin/fastfetch" /usr/local/bin/fastfetch
+
+echo "==> Kitty as the default terminal (DoxIA's defaults and terminal order)"
+install -Dm644 "$doxia_path/etc/xdg/kitty/kitty.conf" /etc/xdg/kitty/kitty.conf
+# System-wide, like DoxIA: ~/.config/xdg-terminals.list (doxia-default-terminal)
+# still wins over it.
+# xdg-terminal-exec picks the list by desktop name (DesktopNames=mango).
+install -Dm644 "$doxia_path/default/xdg-terminal-exec/mango-xdg-terminals.list" \
+  /usr/share/xdg-terminal-exec/mango-xdg-terminals.list
+
+echo "==> Linking DoxIA into /usr/share/doxia"
+# Many DoxIA scripts reference /usr/share/doxia directly (Arch package path).
+if [[ -e /usr/share/doxia && ! -L /usr/share/doxia ]]; then
+  echo "/usr/share/doxia exists and is not a symlink; leaving it alone" >&2
+else
+  ln -sfn "$doxia_path" /usr/share/doxia
+fi
+
+# Same mechanism as `doxia dev link`: DOXIA_PATH points at the checkout.
+# In the format doxia dev link writes, which doxia-plymouth-set checks before
+# trusting a user-owned checkout.
+printf 'export DOXIA_PATH="%s"\n' "$doxia_path" > /etc/doxia.conf
+
+echo "==> DoxIA About screen (fastfetch) and MOTD"
+mkdir -p /etc/fastfetch
+ln -sfn "$doxia_path/fedora/fastfetch/config.jsonc" /etc/fastfetch/config.jsonc
+{ echo; sed 's/^/  /' "$doxia_path/fedora/doxia/brand.ansi"; echo; sed "s/@FEDORA@/$(rpm -E %fedora)/" "$doxia_path/fedora/doxia/motd"; } > /etc/motd
+
+echo "==> Installing DoxIA session entry"
+install -Dm644 "$doxia_path/default/wayland-sessions/doxia.desktop" \
+  /usr/share/wayland-sessions/doxia.desktop
+
+echo "==> Login screen (greetd with doxia-greeter on mango)"
+bash "$doxia_path/fedora/doxia/install-greeter" "$target_user"
+# The ISO installs from @core, where Anaconda picks multi-user.target before greetd exists.
+systemctl set-default graphical.target
+
+echo "==> Configuring lock screen PAM (Fedora variant of doxia-apply-lock)"
+cat > /etc/pam.d/doxia-lock-password <<'EOF'
+auth       required                    pam_faillock.so preauth silent deny=10 unlock_time=120
+-auth      [success=2 default=ignore]  pam_systemd_home.so
+auth       [success=1 default=bad]     pam_unix.so try_first_pass nullok
+auth       [default=die]               pam_faillock.so authfail deny=10 unlock_time=120
+auth       optional                    pam_permit.so
+auth       required                    pam_env.so
+auth       required                    pam_faillock.so authsucc
+account    include                     system-auth
+EOF
+
+if [[ -x /usr/bin/fprintd-list ]] && /usr/bin/fprintd-list "$target_user" 2>/dev/null | grep -qi finger; then
+  cat > /etc/pam.d/doxia-lock-fingerprint <<'EOF'
+auth       required                    pam_fprintd.so
+account    include                     system-auth
+EOF
+fi
+
+echo "==> Nautilus action icons for Yaru (from install/config/theme-system.sh)"
+mkdir -p /usr/share/icons/Yaru/scalable/actions
+ln -snf /usr/share/icons/Adwaita/symbolic/actions/go-previous-symbolic.svg \
+  /usr/share/icons/Yaru/scalable/actions/go-previous-symbolic.svg
+ln -snf /usr/share/icons/Adwaita/symbolic/actions/go-next-symbolic.svg \
+  /usr/share/icons/Yaru/scalable/actions/go-next-symbolic.svg
+gtk-update-icon-cache /usr/share/icons/Yaru &>/dev/null || true
+
+echo
+echo "System setup done. Now run (as $target_user, no sudo):"
+echo "  bash $doxia_path/fedora/install-user.sh"

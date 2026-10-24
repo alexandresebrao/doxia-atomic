@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# doxia:summary=Prompt for required reboot or service restarts after updates
+
+echo
+
+confirm_reboot() {
+  # The update window shows its own Reiniciar agora button.
+  [[ -n ${DOXIA_UPDATE_GUI:-} ]] && doxia-update-state set reboot "\"$2\""
+
+  # doxia-update -y promises not to ask: say a reboot is due and let the caller offer it.
+  if [[ ${DOXIA_UPDATE_UNATTENDED:-} == 1 ]]; then
+    echo "Reboot required: $1"
+    return
+  fi
+  gum confirm "$1" && { doxia-system-reboot; exit 0; }
+}
+
+running_kernel=$(uname -r)
+kernel_updated=true
+
+for kernel in /usr/lib/modules/*/vmlinuz; do
+  if [[ -f $kernel ]] && rpm -qf "$kernel" &>/dev/null; then
+    installed_kernel=$(basename "$(dirname "$kernel")")
+
+    if [[ $installed_kernel == $running_kernel ]]; then
+      kernel_updated=false
+      break
+    fi
+  fi
+done
+
+if [[ $kernel_updated == "true" ]]; then
+  confirm_reboot "Linux kernel has been updated. Reboot?" "O kernel foi atualizado"
+elif [[ -f $HOME/.local/state/doxia/reboot-required ]]; then
+  confirm_reboot "Updates require reboot. Ready?" "A atualização pede um reinício"
+fi
+
+running_mango=$(readlink /proc/$(pgrep -x mango)/exe 2>/dev/null)
+if [[ $running_mango == *"(deleted)"* ]]; then
+  confirm_reboot "mango has been updated. Reboot?" "O mango foi atualizado"
+fi
+
+for file in "$HOME"/.local/state/doxia/restart-*-required; do
+  if [[ -f $file ]]; then
+    filename=$(basename "$file")
+    service=$(echo "$filename" | sed 's/restart-\(.*\)-required/\1/')
+    echo "Restarting $service"
+    doxia-state clear "$filename"
+    doxia-restart-"$service"
+  fi
+done
+
+# From the update window, only when the update changed the shell: the restart
+# closes the window, which then reopens on the result.
+[[ -n ${DOXIA_UPDATE_GUI:-} && -z ${DOXIA_UPDATE_SHELL_CHANGED:-} ]] && exit 0
+
+# Updates routinely replace the shell's QML, and a stale process can lazy-load
+# new files into old code. A restart failure (locked session, ssh, TTY) only
+# prints its reason: the next update or login gets a fresh shell anyway.
+echo -e "\e[32m\nRestarting shell\e[0m"
+echo "All plugins have been reloaded"
+doxia-restart-shell || true

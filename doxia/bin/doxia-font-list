@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# doxia:summary=List available monospace fonts
+# doxia:examples=doxia font list | doxia font set "CaskaydiaMono Nerd Font"
+
+fc-list :spacing=100 -f "%{family[0]}\n" | grep -v -i -E 'emoji|signwriting|doxia' | sort -u

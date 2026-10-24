@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# doxia:summary=Compatibility wrapper for doxia-migrate-notify.
+# doxia:hidden=true
+
+exec doxia-migrate-notify "$@"

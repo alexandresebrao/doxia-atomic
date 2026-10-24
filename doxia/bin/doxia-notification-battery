@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# doxia:summary=Show the current battery status notification
+
+doxia-notification-send -g 󰁹 -u low "$(doxia-battery-status)"

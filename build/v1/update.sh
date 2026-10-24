@@ -1,0 +1,475 @@
+#!/bin/bash
+
+# Brings this machine up to date with the DoxIA repo: pulls it, then reapplies the
+# DoxIA theme (the default), branding, nvm and SDKMAN!, zsh with Oh My Zsh, the salsicha screensaver, the icon font, menu extensions, default
+# agent and editor, the mango user config (once), /etc/motd, the login session
+# name, the login screen (greetd, replacing SDDM), the GRUB boot menu theme, the keyring password window, ONLYOFFICE (instead of LibreOffice), DoxMail as the default mail client, LibreWolf and the DoxIA bar widgets (fedora/doxia/apply-bar: the
+# DoxIA plugins, the services panel included, are refreshed and the missing widgets
+# added; the rest of the bar stays as it is).
+#
+# Everything it replaces or moves aside goes to ~/.local/state/doxia/doxia-backup-<date>/.
+#
+#   bash ~/.local/share/doxia/fedora/update.sh            # git pull + apply
+#   bash ~/.local/share/doxia/fedora/update.sh --no-pull  # apply only
+
+set -euo pipefail
+
+if (( EUID == 0 )); then
+  echo "Run as your user, not root." >&2
+  exit 1
+fi
+
+export DOXIA_PATH="$HOME/.local/share/doxia"
+export PATH="$DOXIA_PATH/bin:$PATH"
+doxia="$DOXIA_PATH/lib"
+backup_dir="$HOME/.local/state/doxia/doxia-backup-$(date +%Y%m%d%H%M%S)"
+
+# Moves a path into the backup dir, keeping its place relative to $HOME.
+backup() {
+  local rel=${1#"$HOME"/}
+  mkdir -p "$backup_dir/$(dirname "$rel")"
+  mv "$1" "$backup_dir/$rel"
+  echo "  backup: ~/$rel"
+}
+
+# Copies src over dest, backing up dest first unless it is already identical.
+place() {
+  local src=$1 dest=$2
+  if [[ -e $dest ]] && diff -rq "$src" "$dest" >/dev/null 2>&1; then
+    return 0
+  fi
+  if [[ -e $dest || -L $dest ]]; then
+    backup "$dest"
+  fi
+  mkdir -p "$(dirname "$dest")"
+  cp -a "$src" "$dest"
+}
+
+# The old salsicha hook patched bin/doxia-screensaver in place. The repo now runs
+# fedora/doxia/screensaver-salsicha itself, so drop that patch (before the pull, so
+# it can't clash with it) and retire the hook.
+sed -i '/screensaver-salsicha  # salsicha$/,+1d' "$DOXIA_PATH/bin/doxia-screensaver"
+if [[ -e $HOME/.config/doxia/hooks/post-update.d/screensaver-salsicha ]]; then
+  backup "$HOME/.config/doxia/hooks/post-update.d/screensaver-salsicha"
+fi
+
+if [[ ${1:-} != "--no-pull" ]]; then
+  echo "==> git pull"
+  # Local edits (like a hook-patched bin/) are stashed around the pull and put back.
+  git -C "$DOXIA_PATH" pull --rebase --autostash
+  # Run the freshly pulled copy of this script.
+  exec bash "$DOXIA_PATH/fedora/update.sh" --no-pull
+fi
+
+echo "==> Kitty as the default terminal (foot and chafa are no longer used)"
+doxia-pkg-add kitty
+doxia-pkg-drop foot chafa
+# Older installs pinned foot in ~/.config/hyprland-xdg-terminals.list, which beats
+# both the system order and a terminal picked with doxia-default-terminal.
+if [[ -e $HOME/.config/hyprland-xdg-terminals.list ]]; then
+  backup "$HOME/.config/hyprland-xdg-terminals.list"
+fi
+[[ -e $HOME/.config/kitty ]] || cp -a "$DOXIA_PATH/config/kitty" "$HOME/.config/kitty"
+
+echo "==> Volume keys and power profiles (pactl, tuned-ppd)"
+doxia-pkg-add pulseaudio-utils tuned-ppd
+if ! systemctl is-enabled --quiet tuned-ppd.service || ! systemctl is-active --quiet tuned-ppd.service; then
+  sudo systemctl enable --now tuned.service tuned-ppd.service
+fi
+
+echo "==> FortiVPN bar widget (openfortivpn)"
+doxia-pkg-add openfortivpn
+
+echo "==> GNOME Shell out (ISO installs got it through the yaru-theme metapackage)"
+# Only Yaru's icons are used. The keyring PAM module came in as one of GNOME
+# Shell's dependencies but unlocks the keyring at the login, so it is marked
+# as wanted before dnf drops the rest (GDM, Mutter, GNOME Settings...). So are
+# malcontent (its polkit policy lets flatpak read the parental controls; without
+# it every flatpak dies with "Not allowed to query parental controls data") and
+# tuned/tuned-ppd, installed just above, which dnf would otherwise sweep away too.
+if doxia-pkg-present yaru-theme; then
+  keep=()
+  for pkg in gnome-keyring gnome-keyring-pam yaru-icon-theme malcontent tuned tuned-ppd; do
+    doxia-pkg-present "$pkg" && keep+=("$pkg")
+  done
+  sudo dnf mark user -y "${keep[@]}" >/dev/null
+  doxia-pkg-drop yaru-theme gnome-shell-theme-yaru gnome-shell-extension-user-theme gnome-shell
+fi
+# Installs updated before that fix lost malcontent along with GNOME Shell.
+doxia-pkg-add malcontent
+
+echo "==> Icon font (∞ glyph)"
+mkdir -p "$HOME/.local/share/fonts/doxia"
+cp -f "$DOXIA_PATH/default/fonts/doxia/doxia.ttf" "$HOME/.local/share/fonts/doxia/"
+fc-cache -f "$HOME/.local/share/fonts/doxia" >/dev/null
+# The font in the repo already carries the ∞, so the hook that re-added it is obsolete.
+if [[ -e $HOME/.config/doxia/hooks/post-update.d/infinito-glifo ]]; then
+  backup "$HOME/.config/doxia/hooks/post-update.d/infinito-glifo"
+fi
+
+echo "==> Branding (About, screensaver and terminal logos, terminal greeting)"
+for file in about.txt screensaver.txt logo.ansi; do
+  place "$doxia/branding/$file" "$HOME/.config/doxia/branding/$file"
+done
+mkdir -p "$HOME/.bashrc.d"
+# The greeting used to be linked as fedorai.sh, before the FedorAI → DoxIA rename.
+rm -f "$HOME/.bashrc.d/fedorai.sh"
+ln -sfn "$DOXIA_PATH/lib/greeting.sh" "$HOME/.bashrc.d/doxia.sh"
+if ! grep -q 'bashrc.d' "$HOME/.bashrc" 2>/dev/null; then
+  printf '\nfor rc in ~/.bashrc.d/*; do [[ -f $rc ]] && . "$rc"; done; unset rc\n' >> "$HOME/.bashrc"
+fi
+
+echo "==> nvm and SDKMAN! (Node.js and Java versions)"
+doxia-pkg-add zip unzip
+bash "$DOXIA_PATH/lib/install-dev-tools"
+# ~/.bashrc.d/dev-tools.sh loads nvm now: drop the lines nvm's own installer
+# appended to ~/.bashrc, which would load it a second time.
+if grep -qxF 'export NVM_DIR="$HOME/.config/nvm"' "$HOME/.bashrc" 2>/dev/null; then
+  mkdir -p "$backup_dir"
+  cp -a "$HOME/.bashrc" "$backup_dir/.bashrc"
+  echo "  backup: ~/.bashrc"
+  sed -i -e '\|^export NVM_DIR="$HOME/.config/nvm"$|d' \
+    -e '\|^\[ -s "$NVM_DIR/nvm.sh" \] && \\. "$NVM_DIR/nvm.sh"|d' \
+    -e '\|^\[ -s "$NVM_DIR/bash_completion" \] && \\. "$NVM_DIR/bash_completion"|d' "$HOME/.bashrc"
+fi
+
+echo "==> zsh with Oh My Zsh and the DoxIA theme (folder, git, Node.js and Java versions)"
+doxia-pkg-add zsh
+bash "$DOXIA_PATH/lib/install-zsh"
+if [[ $(getent passwd "$USER" | cut -d: -f7) != */zsh ]]; then
+  echo "  zsh as the login shell (sudo; takes effect at the next login)"
+  sudo usermod -s /usr/bin/zsh "$USER"
+fi
+
+echo "==> Menu extensions, default agent and editor"
+place "$doxia/doxia-menu.jsonc" "$HOME/.config/doxia/extensions/doxia-menu.jsonc"
+place "$doxia/default-agent" "$HOME/.config/doxia/defaults/agent"
+mkdir -p "$HOME/.local/state/doxia/defaults"
+echo nano > "$HOME/.local/state/doxia/defaults/editor"
+
+echo "==> User units (Bluetooth pairing agent, crash and migration notifiers, internal monitor recovery)"
+bash "$DOXIA_PATH/lib/install-user-units"
+
+# Chrome and Claude Code come with the ISO; older installs get them once, so
+# removing either sticks. A failure only warns, and the next Atualizar retries.
+echo "==> Google Chrome (once)"
+if ! doxia-done check doxia-chrome; then
+  if bash "$DOXIA_PATH/lib/install-chrome"; then
+    doxia-done mark doxia-chrome
+  else
+    echo "  Chrome setup failed; the next Atualizar will retry."
+  fi
+fi
+# Every time, so the copy follows the package's google-chrome.desktop.
+bash "$DOXIA_PATH/lib/chrome/install-desktop" "$DOXIA_PATH"
+
+echo "==> Claude Code (once)"
+if ! doxia-done check doxia-claude; then
+  if bash "$DOXIA_PATH/lib/install-claude"; then
+    doxia-done mark doxia-claude
+  else
+    echo "  Claude Code was not installed; the next Atualizar will retry."
+  fi
+fi
+
+echo "==> Voxtype dictation (once: Remover > Ditado must stick)"
+# Installs made before the ISO set it up never got it (the ISO skips the first-run
+# invitation). A failed download only warns, and the next Atualizar retries.
+if ! doxia-done check doxia-voxtype; then
+  if doxia-pkg-present voxtype && [[ -f $HOME/.config/voxtype/config.toml ]]; then
+    doxia-done mark doxia-voxtype
+  elif bash "$DOXIA_PATH/lib/install-voxtype"; then
+    doxia-done mark doxia-voxtype
+  else
+    echo "  Voxtype setup failed; the next Atualizar will retry."
+  fi
+fi
+
+echo "==> Run on every Atualizar (doxia-update's post-update hook)"
+bash "$DOXIA_PATH/lib/install-update-hook"
+
+echo "==> Keyring password window in the DoxIA style (instead of GNOME's gcr-prompter)"
+doxia-pkg-add gcr-libs
+bash "$DOXIA_PATH/lib/install-keyring-prompter"
+
+echo "==> mango user config (once, for installs that started on Hyprland)"
+# The window rules, Painel, scroll focus and Iniciar binds the Hyprland snippets
+# added now live in default/mango. Files already in ~/.config/mango are kept.
+if [[ ! -f $HOME/.config/mango/config.conf ]]; then
+  mkdir -p "$HOME/.config/mango"
+  cp -n "$DOXIA_PATH"/config/mango/*.conf "$HOME/.config/mango/"
+fi
+
+echo "==> Theme (LiquidIA, the default)"
+doxia-pkg-add redhat-display-fonts redhat-text-fonts papirus-icon-theme-dark git python3-fonttools
+# Reapplied only while LiquidIA (or no theme) is in use: the Atualizar menu runs
+# this after every update, and a theme picked by hand, DoxIA included, must
+# survive it. Installs still on DoxIA were moved to LiquidIA once by a migration.
+current_theme=$(cat "$HOME/.local/state/doxia/current/theme.name" 2>/dev/null || true)
+reapply_theme=false
+[[ -z $current_theme || $current_theme == "liquidia" ]] && reapply_theme=true
+# Copies under ~/.config/doxia/themes shadow the themes shipped in the repo, so move
+# them all aside and let the repo's liquidia be the one in use.
+if $reapply_theme; then
+  for theme in "$HOME"/.config/doxia/themes/*; do
+    [[ -e $theme ]] && backup "$theme"
+  done
+fi
+for tpl in "$doxia"/themed/*.tpl; do
+  place "$tpl" "$HOME/.config/doxia/themed/$(basename "$tpl")"
+done
+[[ -d $HOME/.local/share/icons/Papirus-Tela-Red ]] || bash "$DOXIA_PATH/themes/doxia/make-icons.sh"
+bash "$doxia/lucide/make-theme"
+python3 "$doxia/lucide/make-shell-font"
+mkdir -p "$HOME/.config/doxia/hooks"
+cp -r "$doxia/hooks/." "$HOME/.config/doxia/hooks/"
+gsettings set org.gnome.desktop.wm.preferences button-layout ':'
+for ini in "$HOME/.config/gtk-3.0/settings.ini" "$HOME/.config/gtk-4.0/settings.ini"; do
+  if [[ -f $ini ]] && grep -q '^gtk-decoration-layout=' "$ini"; then
+    sed -i 's/^gtk-decoration-layout=.*/gtk-decoration-layout=:/' "$ini"
+  fi
+done
+gtk_css="$HOME/.config/gtk-4.0/gtk.css"
+mkdir -p "$(dirname "$gtk_css")"
+if ! grep -q 'current/theme/gtk.css' "$gtk_css" 2>/dev/null; then
+  echo "@import url('file://$HOME/.local/state/doxia/current/theme/gtk.css');" >> "$gtk_css"
+fi
+# GTK 3 apps (Evolution etc.) in the theme's colors: the theme-set hook gtk3-colors
+# turns the theme's gtk3.css into a GTK theme in ~/.local/share/themes, which flatpaks may read.
+flatpak override --user --filesystem=xdg-config/gtk-3.0:ro --filesystem=xdg-config/gtk-4.0:ro --filesystem=xdg-data/themes:ro
+# The mail preview in the theme's colors, not the e-mail's own (once, so
+# turning it off in DoxMail sticks; it shares Evolution's settings).
+if ! doxia-done check doxia-evolution-colors && command -v doxmail &>/dev/null; then
+  gsettings set org.gnome.evolution.mail preview-unset-html-colors true &&
+    doxia-done mark doxia-evolution-colors
+fi
+# A kept theme set before gtk3.css.tpl existed gets it by being set again.
+if ! $reapply_theme && [[ -n $current_theme && ! -f $HOME/.local/state/doxia/current/theme/gtk3.css ]]; then
+  reapply_theme=true
+fi
+if ! $reapply_theme; then
+  echo "  keeping the current theme ($current_theme)"
+elif [[ -n ${MANGO_INSTANCE_SIGNATURE:-} ]]; then
+  doxia-theme-set "${current_theme:-liquidia}"
+else
+  DOXIA_THEME_HEADLESS=1 doxia-theme-set "${current_theme:-liquidia}"
+fi
+
+echo "==> Dev-link authorization for the checkout (sudo)"
+# doxia-plymouth-set only trusts a user-owned checkout named this way, the format
+# doxia dev link writes; older installs wrote a bare DOXIA_PATH= line.
+expected_conf="export DOXIA_PATH=\"$DOXIA_PATH\""
+if [[ $(cat /etc/doxia.conf 2>/dev/null) != "$expected_conf" ]]; then
+  printf '%s\n' "$expected_conf" | sudo tee /etc/doxia.conf >/dev/null
+fi
+
+echo "==> Boot splash (Fedora's spinner with the DoxIA watermark)"
+# Fedora's BGRT theme (firmware logo and spinner) with the ∞ DOXIA mark where it
+# shows the Fedora one. The initramfs rebuild is slow, so it only runs on a change.
+plymouth_theme=/usr/share/plymouth/themes/doxia
+if doxia-cmd-present plymouth-set-default-theme &&
+  { ! cmp -s "$DOXIA_PATH/default/plymouth/doxia/watermark.png" "$plymouth_theme/watermark.png" ||
+    ! cmp -s "$DOXIA_PATH/default/plymouth/doxia/doxia.plymouth" "$plymouth_theme/doxia.plymouth" ||
+    [[ $(plymouth-set-default-theme) != "doxia" ]]; }; then
+  doxia-pkg-add plymouth-theme-spinner
+  sudo bash -s "$DOXIA_PATH" <<'ROOT'
+set -euo pipefail
+theme=/usr/share/plymouth/themes/doxia
+install -d "$theme"
+cp /usr/share/plymouth/themes/spinner/*.png "$theme/"
+install -m644 "$1"/default/plymouth/doxia/{doxia.plymouth,watermark.png} "$theme/"
+restorecon -R "$theme" 2>/dev/null || true
+plymouth-set-default-theme doxia
+# The theme used to be installed as fedorai, before the FedorAI → DoxIA rename.
+rm -rf /usr/share/plymouth/themes/fedorai
+dracut -f --regenerate-all
+ROOT
+fi
+
+echo "==> Boot menu (graphical GRUB with the DoxIA theme, sudo)"
+# Regenerates grub.cfg only when the theme or its settings changed.
+sudo bash "$DOXIA_PATH/lib/install-grub-theme" "$DOXIA_PATH"
+
+echo "==> Office suite: ONLYOFFICE from Flathub in Brazilian Portuguese instead of LibreOffice (sudo)"
+# Removing LibreOffice also drops the JDK only it needed: java and node come from
+# SDKMAN! and nvm (fedora/doxia/install-dev-tools).
+sudo bash -s <<'ROOT'
+set -euo pipefail
+office_rpms=$(rpm -qa --qf '%{NAME}\n' 'libreoffice*' unoconv)
+if [[ -n $office_rpms ]]; then
+  dnf remove -y $office_rpms
+fi
+# Brazilian Portuguese whatever the system's language: ONLYOFFICE takes its interface
+# language from LANG, and ships the pt-BR translation and spell checker itself. Its
+# Qt and GTK default to IBus inside Flatpak, whose portal fails without ibus-daemon
+# (which DoxIA doesn't run) and uwsm's fumon reports that as a failed unit: use
+# their built-in input (dead keys and compose included), as they fall back to anyway.
+flatpak override --system --env=LANG=pt_BR.UTF-8 --env=LANGUAGE=pt_BR \
+  --env=QT_IM_MODULE=compose --env=GTK_IM_MODULE=gtk-im-context-simple org.onlyoffice.desktopeditors
+flatpak install -y --noninteractive --or-update flathub org.onlyoffice.desktopeditors
+ROOT
+# ONLYOFFICE with the system title bar (also on every login, from mango's autostart).
+bash "$DOXIA_PATH/lib/onlyoffice-titlebar"
+
+echo "==> Mail: DoxMail as every user's default mail client (sudo)"
+# DoxMail replaces the Evolution Flatpak: this user's mail, accounts and
+# settings come over once (the Flatpak's data stays in ~/.var/app); then the
+# Flatpak goes. Thunderbird, the default before that, stays installed.
+if sudo bash "$DOXIA_PATH/lib/install-doxmail"; then
+  if bash "$DOXIA_PATH/lib/migrate-evolution-flatpak" &&
+    flatpak info --system org.gnome.Evolution &>/dev/null; then
+    sudo flatpak uninstall -y --noninteractive --system org.gnome.Evolution || true
+  fi
+  sudo install -Dm644 "$DOXIA_PATH/lib/mimeapps.list" /etc/xdg/mimeapps.list
+else
+  echo "  DoxMail not installed; Evolution stays the mail client."
+fi
+
+echo "==> Firefox from Flathub instead of the RPM, in the theme's colors, and LibreWolf (sudo)"
+sudo flatpak install -y --noninteractive --or-update flathub org.mozilla.firefox io.gitlab.librewolf-community
+if rpm -q firefox &>/dev/null; then
+  # Without clean_requirements_on_remove dnf would also drop what only Firefox's
+  # dependents (the live installer, anaconda-webui) held: openssl, zenity and
+  # pulseaudio-utils (pactl) among them.
+  sudo dnf remove -y --setopt=clean_requirements_on_remove=False firefox firefox-langpacks
+fi
+# The firefox hook brings the RPM's profile over on the first run and themes it;
+# the Edge hook themes Edge when it is installed. Both read files the theme
+# templates make, so a theme kept by hand (not reapplied above) is set again.
+theme_name=$(cat "$HOME/.local/state/doxia/current/theme.name" 2>/dev/null || true)
+if [[ -n $theme_name && ! -f $HOME/.local/state/doxia/current/theme/firefox.css ]]; then
+  if [[ -n ${MANGO_INSTANCE_SIGNATURE:-} ]]; then
+    doxia-theme-set "$theme_name"
+  else
+    DOXIA_THEME_HEADLESS=1 doxia-theme-set "$theme_name"
+  fi
+fi
+bash "$HOME/.config/doxia/hooks/theme-set.d/firefox"
+bash "$HOME/.config/doxia/hooks/theme-set.d/edge"
+
+echo "==> DoxIA apps in Rust + GTK 4 (sudo)"
+# Their own processes, so this script reloading the shell no longer closes them.
+sudo bash "$DOXIA_PATH/lib/install-rs" || echo "  Not installed; the shell stands in."
+# A running doxia-shell picks up the new binary (its popups survive the restart).
+systemctl --user try-restart doxia-shell.service 2>/dev/null || true
+
+# After install-rs: which Quickshell plugins stay off depends on what the
+# installed doxia-shell can do.
+echo "==> DoxIA bar widgets (∞ menu button, workspace icons, Now Playing, screen share, usage, services)"
+bash "$DOXIA_PATH/lib/apply-bar"
+
+# doxia-shell doing everything, Quickshell goes, then the Qt pieces
+# install-system.sh added for it that nothing installed needs (rpm -e --test,
+# which counts the libraries they provide). The one still running from this
+# session ends at the shell restart after the update.
+if doxia-cmd-doxia-shell-full; then
+  if rpm -q quickshell &>/dev/null; then
+    echo "==> Quickshell, replaced by doxia-shell (sudo)"
+    sudo bash -s <<'ROOT'
+set -euo pipefail
+dnf remove -y quickshell
+qt=()
+for package in qt6-qtwayland qt6-qtimageformats qt6-qtsvg qt6-qt5compat qt6-qtmultimedia; do
+  rpm -e --test "$package" &>/dev/null && qt+=("$package")
+done
+(( ${#qt[@]} )) && dnf remove -y "${qt[@]}"
+dnf copr disable -y errornointernet/quickshell 2>/dev/null || true
+ROOT
+  fi
+  rm -f "$HOME/.config/fontconfig/conf.d/60-doxia-shell.conf"
+fi
+
+echo "==> Runtime packages installs before this one missed (sudo)"
+# perl-JSON-PP: the clipboard history capture and doxia-menu-select/-input.
+rpm -q perl-JSON-PP &>/dev/null || sudo dnf install -y perl-JSON-PP
+
+echo "==> Compositor: mango and its Wayland tools (sudo)"
+# Before the login screen below, whose greeter runs on mango.
+# On VMware, the DoxIA wlroots: Fedora's rejects every client DMA-BUF on vmwgfx.
+sudo bash "$DOXIA_PATH/lib/install-wlroots"
+# The DoxIA scenefx everywhere, before mango, which requires it; it replaces
+# the kaleedtc/mangowm COPR's.
+sudo bash "$DOXIA_PATH/lib/install-scenefx"
+# install-mango puts back the DoxIA build if the unpatched COPR one got in, and
+# disables that COPR.
+sudo bash "$DOXIA_PATH/lib/install-mango"
+# uwsm and gpu-screen-recorder: DoxIA builds in place of the COPRs' (below).
+sudo bash "$DOXIA_PATH/lib/install-uwsm"
+sudo bash "$DOXIA_PATH/lib/install-gpu-screen-recorder"
+sudo bash -s <<'ROOT'
+set -euo pipefail
+# grim and slurp make the color picker since hyprpicker left.
+tools=(xdg-desktop-portal-wlr wlr-randr wlrctl gammastep grim slurp)
+missing=()
+for package in "${tools[@]}"; do
+  rpm -q "$package" &>/dev/null || missing+=("$package")
+done
+if (( ${#missing[@]} )); then
+  dnf install -y --setopt=install_weak_deps=False "${missing[@]}"
+fi
+# Left from the Hyprland installs: its UseIn names wlroots, so under mango it
+# took the global shortcuts and input capture portals mango-portals.conf
+# leaves unset, next to the wlr portal doing the real work.
+if rpm -q xdg-desktop-portal-hyprland &>/dev/null; then
+  dnf remove -y --setopt=clean_requirements_on_remove=False xdg-desktop-portal-hyprland
+fi
+# No COPR left: with uwsm and gpu-screen-recorder replaced above, what is still
+# installed from them is Hyprland and its libraries (and hyprpicker), which
+# nothing in DoxIA runs anymore. Only when removing them takes nothing else
+# along (rpm -e --test).
+coprs=(mineiro/hyprland brycensranch/gpu-screen-recorder-git sdegler/hyprland)
+leftovers=()
+while read -r name repo; do
+  for copr in "${coprs[@]}"; do
+    [[ $repo == "copr:copr.fedorainfracloud.org:${copr/\//:}" ]] && leftovers+=("$name")
+  done
+done < <(dnf repoquery --installed --qf '%{name} %{from_repo}\n' 2>/dev/null)
+if (( ${#leftovers[@]} )); then
+  if rpm -e --test "${leftovers[@]}" &>/dev/null; then
+    dnf remove -y --setopt=clean_requirements_on_remove=False "${leftovers[@]}"
+  else
+    echo "  Kept, other packages need them: ${leftovers[*]}"
+  fi
+fi
+for copr in "${coprs[@]}"; do
+  dnf copr disable -y "$copr" &>/dev/null || true
+done
+ROOT
+
+echo "==> System: /etc/motd, About screen, session name, login screen and browser theme color (sudo)"
+sudo bash -s "$DOXIA_PATH" "$(rpm -E %fedora)" "$USER" <<'ROOT'
+set -euo pipefail
+doxia_path=$1
+{ echo; sed 's/^/  /' "$doxia_path/fedora/doxia/brand.ansi"; echo; sed "s/@FEDORA@/$2/" "$doxia_path/fedora/doxia/motd"; } > /etc/motd
+chmod 644 /etc/motd
+mkdir -p /etc/fastfetch
+ln -sfn "$doxia_path/fedora/fastfetch/config.jsonc" /etc/fastfetch/config.jsonc
+ln -sfn "$doxia_path/fedora/bin/fastfetch" /usr/local/bin/fastfetch
+install -Dm644 "$doxia_path/etc/xdg/kitty/kitty.conf" /etc/xdg/kitty/kitty.conf
+install -Dm644 "$doxia_path/default/xdg-terminal-exec/mango-xdg-terminals.list" \
+  /usr/share/xdg-terminal-exec/mango-xdg-terminals.list
+install -Dm755 "$doxia_path/fedora/doxia/kernel-install/95-doxia-title.install" \
+  /etc/kernel/install.d/95-doxia-title.install
+/etc/kernel/install.d/95-doxia-title.install retitle
+install -Dm644 "$doxia_path/default/wayland-sessions/doxia.desktop" /usr/share/wayland-sessions/doxia.desktop
+# The login screen: greetd and doxia-greeter replace SDDM from the next boot
+# on. Only once install-rs (above) brought doxia-greeter, or the next boot
+# would land on the console login greetd falls back to.
+if [[ -x /usr/local/bin/doxia-greeter ]]; then
+  bash "$doxia_path/fedora/doxia/install-greeter" "$3"
+else
+  echo "  doxia-greeter is not installed yet: the login screen stays as it is."
+fi
+bash "$doxia_path/fedora/doxia/install-browser-policy" "$doxia_path"
+# The touchpad for doxia-shell (the background follows three-finger swipes)
+bash "$doxia_path/fedora/doxia/install-touchpad-access"
+# Chrome takes the theme from its profile now (fedora/doxia/chrome): a policy color
+# would keep its frame light, so the policy directory installs used to get goes.
+rm -f /etc/opt/chrome/policies/managed/color.json
+rmdir /etc/opt/chrome/policies/managed /etc/opt/chrome/policies 2>/dev/null || true
+ROOT
+
+if [[ -d $backup_dir ]]; then
+  echo "Replaced files were saved in $backup_dir"
+fi
+echo "Done."

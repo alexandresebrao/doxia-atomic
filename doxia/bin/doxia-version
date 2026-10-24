@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# doxia:summary=Print the installed DoxIA version
+
+doxia_path=${DOXIA_PATH:-/usr/share/doxia}
+doxia_path=${doxia_path%/}
+
+if [[ $doxia_path != "/usr/share/doxia" ]]; then
+  hash=$(git -C "$doxia_path" rev-parse --short HEAD 2>/dev/null || true)
+
+  if [[ -n $hash ]]; then
+    echo "dev ($hash)"
+  else
+    echo "dev"
+  fi
+
+  exit 0
+fi
+
+# The edge channel installs doxia-dev instead of doxia, so check both.
+for package in doxia-dev doxia; do
+  version=$(pacman -Q "$package" 2>/dev/null | awk '{ print $2 }')
+  [[ -n $version ]] && break
+done
+
+[[ -n $version ]] || exit 1
+
+echo "$version"

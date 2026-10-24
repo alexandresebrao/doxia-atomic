@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# doxia:summary=Install packages if they are missing
+# doxia:args=<packages...>
+# doxia:examples=doxia pkg add jq ripgrep
+# doxia:requires-sudo=true
+# Fedora port: rpm/dnf instead of pacman/yay.
+
+if doxia-pkg-missing "$@"; then
+  if (( EUID == 0 )); then
+    dnf install -y "$@" || exit 1
+  else
+    sudo dnf install -y "$@" || exit 1
+  fi
+fi
+
+for pkg in "$@"; do
+  if ! rpm -q --whatprovides "$pkg" &>/dev/null; then
+    echo -e "[31mError: Package '$pkg' did not install[0m" >&2
+    exit 1
+  fi
+done
+
+exit 0

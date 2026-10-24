@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# doxia:summary=Returns true when clamshell mode is active
+# doxia:hidden=true
+
+# Clamshell = lid closed while driving one or more external monitors.
+doxia-hw-laptop-closed && doxia-hw-external-monitors

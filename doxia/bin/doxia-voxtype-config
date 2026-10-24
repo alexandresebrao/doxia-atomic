@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# doxia:summary=Open Voxtype configuration, or offer to install it when it's missing
+
+set -e
+
+# The bar's dictation icon is always shown, so a click before Voxtype is
+# installed would only fail with "voxtype: command not found".
+if doxia-cmd-missing voxtype; then
+  exec doxia-launch-floating-terminal-with-presentation doxia-voxtype-install
+fi
+
+doxia-launch-floating-terminal-with-presentation "voxtype configure"
+doxia-restart-shell

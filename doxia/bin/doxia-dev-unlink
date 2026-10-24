@@ -1,0 +1,64 @@
+#!/bin/bash
+
+# doxia:summary=Restore DoxIA to the package install after reboot
+# doxia:group=dev
+# doxia:args=[--no-reboot]
+
+set -euo pipefail
+
+if (( EUID == 0 )); then
+  echo "Error: run doxia-dev-unlink as your user, not under sudo." >&2
+  exit 1
+fi
+
+prompt_reboot=1
+
+sudoers_file="/etc/sudoers.d/doxia-dev-path"
+
+if (( $# > 1 )); then
+  echo "Usage: doxia dev unlink [--no-reboot]" >&2
+  exit 1
+fi
+
+case "${1:-}" in
+  "")
+    ;;
+  --no-reboot)
+    prompt_reboot=0
+    ;;
+  -h|--help)
+    cat <<USAGE
+Usage: doxia dev unlink [--no-reboot]
+
+Writes /etc/doxia.conf so DOXIA_PATH resolves to /usr/share/doxia
+after reboot. This intentionally does not rewrite the running Hyprland,
+systemd, shell, or app-launcher environment; reboot to make every layer agree.
+
+Removes $sudoers_file, the drop-in that pointed sudo
+at the checkout, so sudo goes back to the packaged doxia-* immediately.
+
+Use --no-reboot when another command will handle the reboot prompt.
+USAGE
+    exit 0
+    ;;
+  *)
+    echo "Usage: doxia dev unlink [--no-reboot]" >&2
+    exit 1
+    ;;
+esac
+
+default_target="/usr/share/doxia"
+
+printf 'export DOXIA_PATH="%s"\n' "$default_target" | sudo tee /etc/doxia.conf >/dev/null
+
+# doxia-dev-link prepended the checkout to sudo's secure_path. Drop it in the
+# same step that drops the checkout, or sudo keeps running a tree nothing else
+# points at — and keeps trusting a user-writable directory for root's commands.
+sudo rm -f "$sudoers_file"
+
+echo "Pointed DoxIA at $default_target"
+echo
+
+if (( prompt_reboot )) && gum confirm "Reboot now to activate?"; then
+  doxia-system-reboot
+fi

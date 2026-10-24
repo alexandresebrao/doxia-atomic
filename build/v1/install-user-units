@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# Installs the DoxIA user units DoxIA uses in ~/.config/systemd/user and enables
+# them: the Bluetooth pairing agent, the crash notifier, the pending migrations
+# notifier, the internal monitor recovery and the DoxIA shell daemon. On Arch the doxia package ships
+# them in /usr/lib/systemd/user; here they point at the checkout's bin/ and
+# migrations/, like doxia-sleep-lock in install-user.sh.
+# Enabled through the .wants symlinks, as the installer has no user manager to ask.
+# The agent and the notifiers run only in mango (XDG_CURRENT_DESKTOP from
+# default/mango/envs.conf): KDE has its own agent, and the notifications need
+# the DoxIA shell.
+# Run as the user by install-user.sh and fedora/update.sh.
+
+set -euo pipefail
+
+if (( EUID == 0 )); then
+  echo "Run as your user, not root." >&2
+  exit 1
+fi
+
+doxia_path=${DOXIA_PATH:-$HOME/.local/share/doxia}
+units=$HOME/.config/systemd/user
+
+for unit in bt-agent doxia-crash-watch doxia-migrate-notify doxia-recover-internal-monitor; do
+  mango_only=()
+  [[ $unit == "doxia-recover-internal-monitor" ]] ||
+    mango_only=(-e '/^\[Unit\]/a ConditionEnvironment=XDG_CURRENT_DESKTOP=mango:wlroots')
+  mkdir -p "$units"
+  sed -e "s|/usr/bin/doxia-|$doxia_path/bin/doxia-|g" \
+    -e "s|/usr/share/doxia/migrations|$doxia_path/migrations|g" "${mango_only[@]}" \
+    "$doxia_path/default/systemd/user/$unit.service" > "$units/$unit.service"
+
+  target=$(sed -n 's/^WantedBy=//p' "$units/$unit.service")
+  mkdir -p "$units/$target.wants"
+  ln -sfn "../$unit.service" "$units/$target.wants/$unit.service"
+done
+
+# doxia-shell's unit is DoxIA's own (not a checkout path to rewrite).
+install -m644 "$doxia_path/fedora/doxia/doxia-shell.service" "$units/doxia-shell.service"
+mkdir -p "$units/graphical-session.target.wants"
+ln -sfn ../doxia-shell.service "$units/graphical-session.target.wants/doxia-shell.service"
+
+# On Atualizar the session is up: start what the next login would.
+if [[ -S ${XDG_RUNTIME_DIR:-/nonexistent}/bus ]]; then
+  systemctl --user daemon-reload
+  if systemctl --user is-active --quiet graphical-session.target; then
+    systemctl --user start bt-agent.service doxia-crash-watch.service doxia-shell.service
+  fi
+fi

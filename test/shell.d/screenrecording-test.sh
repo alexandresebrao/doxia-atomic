@@ -1,0 +1,300 @@
+#!/bin/bash
+
+set -euo pipefail
+
+source "$(dirname "$0")/base-test.sh"
+
+tmp_dir=$(mktemp -d)
+trap 'rm -rf "$tmp_dir"' EXIT
+
+stub_bin="$tmp_dir/bin"
+mkdir -p "$stub_bin"
+
+cat >"$stub_bin/v4l2-ctl" <<'SH'
+#!/bin/bash
+
+[[ ${DOXIA_TEST_NO_WEBCAM:-false} == "true" ]] && exit 0
+
+case "$1" in
+--list-devices)
+  printf '%s\n' "ipu6 (PCI:0000:00:05.0):"
+  printf '\t%s\n' "/dev/video0"
+  printf '\t%s\n' "/dev/video1"
+
+  if [[ ${DOXIA_TEST_RAW_WEBCAM:-false} != "true" ]]; then
+    printf '\n%s\n' "Built-in Webcam: Integrated Camera"
+    printf '\t%s\n' "/dev/video42"
+    printf '\t%s\n' "/dev/video43"
+    printf '\n%s\n' "USB Capture Card: External Camera"
+    printf '\t%s\n' "/dev/video2"
+  fi
+
+  if [[ ${DOXIA_TEST_DUAL_NODE_WEBCAM:-false} == "true" ]]; then
+    printf '\n%s\n' "Dual Node Camera: ISP Wrapper"
+    printf '\t%s\n' "/dev/video7"
+    printf '\t%s\n' "/dev/video8"
+    printf '\n%s\n' "Metadata Only: Sensor"
+    printf '\t%s\n' "/dev/video9"
+  fi
+  ;;
+--device)
+  case "$2" in
+  /dev/video0) device_capability="Video Output" ;;
+  /dev/video1) device_capability="Metadata Capture" ;;
+  /dev/video7 | /dev/video9) device_capability="Video Output" ;;
+  *) device_capability="Video Capture" ;;
+  esac
+
+  printf '%s\n' \
+    "Driver Info:" \
+    $'\tCapabilities     : 0x84a00001' \
+    $'\t\tVideo Capture' \
+    $'\tDevice Caps      : 0x04200001' \
+    $'\t\t'"$device_capability"
+  ;;
+esac
+SH
+
+cat >"$stub_bin/doxia-menu-select" <<'SH'
+#!/bin/bash
+
+printf '%s\n' "$@" >"$DOXIA_TEST_MENU_ARGS"
+printf '%s\n' "$3"
+SH
+
+cat >"$stub_bin/doxia-capture-screenrecording" <<'SH'
+#!/bin/bash
+
+printf '%s\n' "$@" >"$DOXIA_TEST_RECORDER_ARGS"
+SH
+
+cat >"$stub_bin/doxia-notification-send" <<'SH'
+#!/bin/bash
+
+printf '%s\n' "$@" >"$DOXIA_TEST_NOTIFICATION_ARGS"
+SH
+
+chmod +x "$stub_bin"/*
+
+export PATH="$stub_bin:$ROOT/bin:$PATH"
+# The resize helper anchors to a region file here, so keep it out of the real one
+export XDG_RUNTIME_DIR="$tmp_dir"
+export DOXIA_TEST_MENU_ARGS="$tmp_dir/menu-args"
+export DOXIA_TEST_RECORDER_ARGS="$tmp_dir/recorder-args"
+export DOXIA_TEST_NOTIFICATION_ARGS="$tmp_dir/notification-args"
+
+mapfile -t capture_devices < <(doxia-capture-webcam-list)
+expected_capture_devices=(
+  "/dev/video42  Built-in Webcam: Integrated Camera"
+  "/dev/video2  USB Capture Card: External Camera"
+)
+
+if [[ ${capture_devices[*]} != "${expected_capture_devices[*]}" ]]; then
+  fail "webcam detection filters output-only devices and collapses each capture group" \
+    "expected: ${expected_capture_devices[*]}\nactual:   ${capture_devices[*]}"
+fi
+pass "webcam detection filters output-only devices and collapses each capture group"
+
+dual_node=$(DOXIA_TEST_DUAL_NODE_WEBCAM=true doxia-capture-webcam-list) ||
+  fail "webcam listing exits zero when the trailing device is filtered"
+pass "webcam listing exits zero when the trailing device is filtered"
+
+expected_dual_node="/dev/video42  Built-in Webcam: Integrated Camera
+/dev/video2  USB Capture Card: External Camera
+/dev/video8  Dual Node Camera: ISP Wrapper"
+[[ $dual_node == "$expected_dual_node" ]] ||
+  fail "webcam detection falls through to a later capture-capable node in a group" "$dual_node"
+pass "webcam detection falls through to a later capture-capable node in a group"
+
+if "$ROOT/bin/doxia-hw-webcam"; then
+  pass "webcam hardware detection succeeds when a capture device is available"
+else
+  fail "webcam hardware detection succeeds when a capture device is available"
+fi
+
+if DOXIA_TEST_RAW_WEBCAM=true "$ROOT/bin/doxia-hw-webcam"; then
+  fail "webcam hardware detection rejects output-only video devices"
+else
+  pass "webcam hardware detection rejects output-only video devices"
+fi
+
+if DOXIA_TEST_NO_WEBCAM=true "$ROOT/bin/doxia-hw-webcam"; then
+  fail "webcam hardware detection fails when no video device is available"
+else
+  pass "webcam hardware detection fails when no video device is available"
+fi
+
+if DOXIA_TEST_RAW_WEBCAM=true "$ROOT/bin/doxia-capture-screenrecording-with-webcam"; then
+  fail "screenrecording webcam picker rejects output-only video devices"
+fi
+grep -Fx 'Nenhuma webcam encontrada' "$DOXIA_TEST_NOTIFICATION_ARGS" >/dev/null || \
+  fail "screenrecording webcam picker reports no capture-capable device"
+pass "screenrecording webcam picker rejects output-only video devices"
+
+"$ROOT/bin/doxia-capture-screenrecording-with-webcam"
+
+expected_menu_args="$tmp_dir/expected-menu-args"
+printf '%s\n' \
+  "Select Webcam" \
+  "/dev/video42  Built-in Webcam: Integrated Camera" \
+  "/dev/video2  USB Capture Card: External Camera" \
+  "--" \
+  "--width" \
+  "520" \
+  "--maxheight" \
+  "520" >"$expected_menu_args"
+
+if ! cmp -s "$DOXIA_TEST_MENU_ARGS" "$expected_menu_args"; then
+  fail "screenrecording webcam picker passes each webcam as a menu option" "$(diff -u "$expected_menu_args" "$DOXIA_TEST_MENU_ARGS")"
+fi
+pass "screenrecording webcam picker passes each webcam as a menu option"
+
+expected_recorder_args="$tmp_dir/expected-recorder-args"
+printf '%s\n' \
+  "--with-desktop-audio" \
+  "--with-microphone-audio" \
+  "--with-webcam" \
+  "--webcam-device=/dev/video2" >"$expected_recorder_args"
+
+if ! cmp -s "$DOXIA_TEST_RECORDER_ARGS" "$expected_recorder_args"; then
+  fail "screenrecording webcam picker starts recording with selected device" "$(diff -u "$expected_recorder_args" "$DOXIA_TEST_RECORDER_ARGS")"
+fi
+pass "screenrecording webcam picker starts recording with selected device"
+
+first_webcam=$(doxia-capture-webcam-list | sed -n '1s/[[:space:]].*//p')
+[[ $first_webcam == "/dev/video42" ]] || fail "screenrecording auto-detection selects the first capture device"
+grep -F 'WEBCAM_DEVICE=$(doxia-capture-webcam-list' "$ROOT/bin/doxia-capture-screenrecording" >/dev/null || \
+  fail "screenrecording auto-detection uses capture-capable webcams"
+pass "screenrecording auto-detection uses the first capture-capable webcam"
+
+# mango reports the monitor's layout box, already divided by its scale.
+cat >"$stub_bin/mmsg" <<'SH'
+#!/bin/bash
+
+case "$1 $2" in
+"get all-clients")
+  printf '{"clients":[{"id":7,"title":"%s","width":%s,"height":%s,"monitor":"DP-2"}]}\n' \
+    "${DOXIA_TEST_CLIENT_TITLE:-WebcamOverlay}" \
+    "${DOXIA_TEST_CLIENT_WIDTH:-178}" \
+    "${DOXIA_TEST_CLIENT_HEIGHT:-200}"
+  ;;
+"get all-monitors")
+  scale=${DOXIA_TEST_MONITOR_SCALE:-2}
+  printf '{"monitors":[{"name":"DP-2","x":1280,"y":-100,"width":%s,"height":%s}]}\n' \
+    "$(( ${DOXIA_TEST_MONITOR_WIDTH:-2560} / scale ))" \
+    "$(( ${DOXIA_TEST_MONITOR_HEIGHT:-1600} / scale ))"
+  ;;
+dispatch*)
+  printf '%s\n' "$*" >>"$DOXIA_TEST_MMSG_ARGS"
+  ;;
+esac
+SH
+chmod +x "$stub_bin/mmsg"
+
+export DOXIA_TEST_MMSG_ARGS="$tmp_dir/mmsg-args"
+
+"$ROOT/bin/doxia-capture-webcam-resize" smaller
+
+expected_mmsg_args="$tmp_dir/expected-mmsg-args"
+printf '%s\n' \
+  'dispatch resizewin,128,144 client,7' \
+  'dispatch movewin,2392,516 client,7' >"$expected_mmsg_args"
+
+if ! cmp -s "$DOXIA_TEST_MMSG_ARGS" "$expected_mmsg_args"; then
+  fail "webcam resize preserves its aspect ratio and corner anchor" "$(diff -u "$expected_mmsg_args" "$DOXIA_TEST_MMSG_ARGS")"
+fi
+pass "webcam resize preserves its aspect ratio and corner anchor"
+
+: >"$DOXIA_TEST_MMSG_ARGS"
+DOXIA_TEST_MONITOR_WIDTH=1920 \
+  DOXIA_TEST_MONITOR_HEIGHT=1080 \
+  DOXIA_TEST_MONITOR_SCALE=1 \
+  DOXIA_TEST_CLIENT_WIDTH=128 \
+  DOXIA_TEST_CLIENT_HEIGHT=144 \
+  "$ROOT/bin/doxia-capture-webcam-resize" reset
+
+printf '%s\n' \
+  'dispatch resizewin,240,270 client,7' \
+  'dispatch movewin,2920,670 client,7' >"$expected_mmsg_args"
+
+if ! cmp -s "$DOXIA_TEST_MMSG_ARGS" "$expected_mmsg_args"; then
+  fail "webcam default size adapts to monitor resolution" "$(diff -u "$expected_mmsg_args" "$DOXIA_TEST_MMSG_ARGS")"
+fi
+pass "webcam default size adapts to monitor resolution"
+
+: >"$DOXIA_TEST_MMSG_ARGS"
+DOXIA_TEST_CLIENT_TITLE="Other Window" "$ROOT/bin/doxia-capture-webcam-resize" larger
+
+if [[ -s $DOXIA_TEST_MMSG_ARGS ]]; then
+  fail "webcam resize ignores other windows" "$(cat "$DOXIA_TEST_MMSG_ARGS")"
+fi
+pass "webcam resize ignores other windows"
+
+region_file="$XDG_RUNTIME_DIR/doxia-screenrecord-region"
+
+: >"$DOXIA_TEST_MMSG_ARGS"
+echo "800x600+100+100" >"$region_file"
+"$ROOT/bin/doxia-capture-webcam-resize" reset
+
+printf '%s\n' \
+  'dispatch resizewin,133,150 client,7' \
+  'dispatch movewin,727,510 client,7' >"$expected_mmsg_args"
+
+if ! cmp -s "$DOXIA_TEST_MMSG_ARGS" "$expected_mmsg_args"; then
+  fail "webcam anchors to the recorded region" "$(diff -u "$expected_mmsg_args" "$DOXIA_TEST_MMSG_ARGS")"
+fi
+pass "webcam anchors to the recorded region"
+
+printf '%s\n' \
+  'dispatch resizewin,178,200 client,7' \
+  'dispatch movewin,2342,460 client,7' >"$expected_mmsg_args"
+
+for region in "not-a-region" ""; do
+  : >"$DOXIA_TEST_MMSG_ARGS"
+  printf '%s' "$region" >"$region_file"
+  "$ROOT/bin/doxia-capture-webcam-resize" reset
+
+  if ! cmp -s "$DOXIA_TEST_MMSG_ARGS" "$expected_mmsg_args"; then
+    fail "webcam falls back to the monitor for an unusable region" "$(diff -u "$expected_mmsg_args" "$DOXIA_TEST_MMSG_ARGS")"
+  fi
+done
+pass "webcam falls back to the monitor for an unusable region"
+
+# A region too narrow for presets scaled from its height shrinks the whole
+# ladder, so the three sizes stay distinct and each one fits inside the margins
+: >"$DOXIA_TEST_MMSG_ARGS"
+echo "200x1200+0+0" >"$region_file"
+for size in small medium large; do
+  "$ROOT/bin/doxia-capture-webcam-resize" "$size"
+done
+
+printf '%s\n' \
+  'dispatch resizewin,64,72 client,7' \
+  'dispatch movewin,96,1088 client,7' \
+  'dispatch resizewin,89,100 client,7' \
+  'dispatch movewin,71,1060 client,7' \
+  'dispatch resizewin,120,135 client,7' \
+  'dispatch movewin,40,1025 client,7' >"$expected_mmsg_args"
+
+if ! cmp -s "$DOXIA_TEST_MMSG_ARGS" "$expected_mmsg_args"; then
+  fail "webcam sizes stay distinct and inside a narrow region" "$(diff -u "$expected_mmsg_args" "$DOXIA_TEST_MMSG_ARGS")"
+fi
+pass "webcam sizes stay distinct and inside a narrow region"
+
+rm -f "$region_file"
+
+grep -Fx 'bind=SUPER+ALT,code:34,spawn,doxia-capture-webcam-resize smaller' \
+  "$ROOT/default/mango/bindings/utilities.conf" >/dev/null || fail "webcam smaller hotkey is configured"
+grep -Fx 'bind=SUPER+ALT,code:35,spawn,doxia-capture-webcam-resize larger' \
+  "$ROOT/default/mango/bindings/utilities.conf" >/dev/null || fail "webcam larger hotkey is configured"
+pass "webcam resize hotkeys are configured"
+
+grep -F -- '--wayland-app-id="WebcamOverlay-$WEBCAM_SIZE"' \
+  "$ROOT/bin/doxia-capture-screenrecording" >/dev/null || fail "webcam uses a dedicated size-specific app id"
+
+# Each size opens floating in its corner without taking focus.
+for size in small medium large; do
+  grep -Eq "^window_rule=is_floating:1,.*is_open_silent:1,.*app_id:\\^WebcamOverlay-$size\\\$\$" \
+    "$ROOT/default/mango/windows.conf" || fail "$size webcam has its corner rule"
+done
+pass "webcam size rules place the initial window in its final corner"

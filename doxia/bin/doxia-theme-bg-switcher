@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# doxia:summary=Open the DoxIA background switcher
+# doxia:group=theme
+# doxia:name=bg-switcher
+# doxia:aliases=doxia background
+
+theme_name=$(cat "$HOME/.local/state/doxia/current/theme.name" 2>/dev/null)
+current_background=$(readlink -f "$HOME/.local/state/doxia/current/background" 2>/dev/null)
+
+doxia-menu-images \
+  --selected "$current_background" \
+  "$HOME/.local/state/doxia/current/theme/backgrounds" \
+  "$HOME/.config/doxia/backgrounds/$theme_name"

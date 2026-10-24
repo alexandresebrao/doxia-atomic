@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# doxia:summary=Clear the internal-monitor-disable toggle if no external display is connected.
+
+# Runs before the session starts (doxia-recover-internal-monitor.service), so
+# a laptop that boots without its external display never comes up dark. The
+# monitor watcher does the same while the session runs.
+FLAG="$HOME/.local/state/doxia/toggles/mango/internal-monitor-disable"
+
+if [[ -f $FLAG ]] && ! doxia-hw-external-monitors; then
+  rm -f "$FLAG"
+  doxia-mango-monitor-apply
+fi

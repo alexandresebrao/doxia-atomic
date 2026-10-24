@@ -1,0 +1,348 @@
+#!/bin/bash
+
+# doxia:summary=Display mango keybindings defined in your configuration using an interactive search menu.
+
+# mango has no IPC call that lists binds, so read them from the files mango
+# loads: the DoxIA defaults that doxia-mango-bindings kept, then every
+# user file in ~/.config/mango. The comment line above a bind describes it.
+BIND_FILES=("$HOME/.local/state/doxia/mango/bindings.conf" "$HOME"/.config/mango/*.conf)
+
+# Binds name keys by XKB keycode (code:NN). Resolve them to symbols
+# via the compiled keymap, with a small fallback for common keys so the menu
+# remains readable if xkbcli cannot resolve a symbol.
+parse_keycodes() {
+  awk '
+    BEGIN {
+      split("10=1 11=2 12=3 13=4 14=5 15=6 16=7 17=8 18=9 19=0 20=MINUS 21=EQUAL 59=COMMA 60=PERIOD 61=SLASH", fallbacks, " ")
+      for (i in fallbacks) {
+        separator = index(fallbacks[i], "=")
+        keycode_symbol[substr(fallbacks[i], 1, separator - 1)] = substr(fallbacks[i], separator + 1)
+      }
+
+      # </dev/null keeps xkbcli from consuming the binding records on stdin
+      keymap_cmd = "xkbcli compile-keymap </dev/null 2>/dev/null"
+      section = ""
+      while ((keymap_cmd | getline line) > 0) {
+        if (line ~ /xkb_keycodes/) { section = "codes"; continue }
+        if (line ~ /xkb_symbols/)  { section = "syms";  continue }
+        if (section == "codes" && match(line, /<([A-Za-z0-9_]+)>\s*=\s*([0-9]+)\s*;/, m)) code_by_name[m[1]] = m[2]
+        if (section == "syms" && match(line, /key\s*<([A-Za-z0-9_]+)>\s*\{\s*\[\s*([^, \]]+)/, m)) sym_by_name[m[1]] = m[2]
+      }
+      close(keymap_cmd)
+
+      for (name in code_by_name) {
+        code = code_by_name[name]
+        symbol = sym_by_name[name]
+        if (code != "" && symbol != "" && symbol != "NoSymbol") keycode_symbol[code] = toupper(symbol)
+      }
+
+      mouse_symbol["272"] = "LEFT MOUSE BUTTON"
+      mouse_symbol["273"] = "RIGHT MOUSE BUTTON"
+      mouse_symbol["274"] = "MIDDLE MOUSE BUTTON"
+    }
+    {
+      if (match($0, /code:([0-9]+)/, match_parts)) {
+        code = match_parts[1]
+        symbol = keycode_symbol[code]
+        if (symbol == "") symbol = "code:" code
+        sub("code:" code, symbol)
+      } else if (match($0, /mouse:([0-9]+)/, match_parts)) {
+        code = match_parts[1]
+        symbol = mouse_symbol[code]
+        if (symbol == "") symbol = "mouse:" code
+        sub("mouse:" code, symbol)
+      }
+
+      print
+    }
+  '
+}
+
+# Read the binds mango loads, in default key mode only.
+#
+# Also do some pre-processing:
+# - Take the comment line right above a bind as its description
+# - Remove standard DoxIA bin path prefix
+# - Render "SUPER+SHIFT" modifiers as "SUPER SHIFT"
+# - Output comma-separated values that the parser can understand
+dynamic_bindings() {
+  local file
+  local files=()
+
+  for file in "${BIND_FILES[@]}"; do
+    [[ -f $file ]] && files+=("$file")
+  done
+  ((${#files[@]})) || return 0
+
+  awk '
+    FNR == 1 { mode = "default"; description = "" }
+
+    /^[ \t]*key_mode[ \t]*=/ {
+      mode = $0; sub(/^[^=]*=[ \t]*/, "", mode); gsub(/[ \t]+$/, "", mode)
+      next
+    }
+
+    /^[ \t]*#/ {
+      description = $0; sub(/^[ \t]*#[ \t]*/, "", description)
+      next
+    }
+
+    match($0, /^[ \t]*(bind[a-z]*|mousebind)[ \t]*=[ \t]*(.*)$/, m) && mode == "default" {
+      n = split(m[2], f, ",")
+      mods = f[1]; key = f[2]; fn = f[3]
+      gsub(/^[ \t]+|[ \t]+$/, "", mods); gsub(/^[ \t]+|[ \t]+$/, "", key); gsub(/^[ \t]+|[ \t]+$/, "", fn)
+      arg = ""
+      for (i = 4; i <= n; i++) arg = arg (i > 4 ? "," : "") f[i]
+      gsub(/^[ \t]+/, "", arg)
+
+      mods = toupper(mods); gsub(/[ \t]*\+[ \t]*/, " ", mods)
+      if (mods == "NONE") mods = ""
+      if (key !~ /^code:/) key = toupper(key)
+      if (key == "BTN_LEFT") key = "LEFT MOUSE BUTTON"
+      else if (key == "BTN_RIGHT") key = "RIGHT MOUSE BUTTON"
+      else if (key == "BTN_MIDDLE") key = "MIDDLE MOUSE BUTTON"
+
+      # A description is a short phrase; longer comments head a block of binds.
+      d = description
+      if (d ~ /[.:;]$/ || length(d) > 60) d = ""
+      gsub(/,/, "", d)
+      description = ""
+
+      # The Copilot key just duplicates an existing binding, so keep it hidden
+      if (key == "CODE:201" || key == "code:201") next
+
+      sub(/^~\/\.local\/share\/doxia\/bin\//, "", arg)
+      printf "%s,%s,%s,%s,%s\n", mods, key, d, fn, arg
+      next
+    }
+
+    { description = "" }
+  ' "${files[@]}"
+}
+
+# Hardcoded bindings, like the copy-url extension and such. They are typed
+# into the focused window with wtype.
+static_bindings() {
+  echo "SHIFT ALT,L,Copy URL from Web App,keys,-M shift -M alt -k l -m alt -m shift"
+  echo "SHIFT ALT,D,Download Video from Web App,keys,-M shift -M alt -k d -m alt -m shift"
+}
+
+# Parse and format keybindings
+#
+# `awk` does the heavy lifting:
+# - Set the field separator to a comma ','.
+# - Joins the key combination (e.g., "SUPER + Q").
+# - Joins the command that the key executes.
+# - Prints display text and dispatch metadata as tab-separated fields.
+parse_binding_records() {
+  awk -F, '
+{
+    # Combine the modifier and key (first two fields)
+    key_combo = $1 " + " $2;
+
+    # Clean up: strip leading "+" if present, trim spaces
+    gsub(/^[ \t]*\+?[ \t]*/, "", key_combo);
+    gsub(/[ \t]+$/, "", key_combo);
+
+    # Use description, if set
+    action = $3;
+    dispatcher = $4;
+
+    # Reconstruct the dispatcher arg from the remaining fields
+    arg = "";
+    for (i = 5; i <= NF; i++) {
+        arg = arg $i (i < NF ? "," : "");
+    }
+
+    if (action == "") {
+        # Reconstruct the command from the remaining fields
+        for (i = 4; i <= NF; i++) {
+            action = action $i (i < NF ? "," : "");
+        }
+
+        # Clean up trailing commas, remove leading "exec, ", and trim
+        sub(/,$/, "", action);
+        gsub(/(^|,)[[:space:]]*(exec|spawn|spawn_shell)[[:space:]]*,?/, "", action);
+        gsub(/(^|[[:space:]])uwsm(-app| app)[[:space:]]+--[[:space:]]+/, "", action);
+        gsub(/^[ \t]+|[ \t]+$/, "", action);
+        gsub(/[ \t]+/, " ", key_combo);  # Collapse multiple spaces to one
+    }
+
+    if (action != "") {
+        printf "%-35s → %s\t%s\t%s\n", key_combo, action, dispatcher, arg;
+    }
+}'
+}
+
+prioritize_entries() {
+  awk -F '\t' '
+  {
+    line = $1
+    prio = 50
+    if (match(line, /Keybindings/)) prio = 0
+    if (match(line, /DoxIA menu/))  prio = 1
+    if (match(line, /Terminal/)) prio = 2
+    if (match(line, /Browser/) && !match(line, /Browser[[:space:]]*\(/) && !match(line, /SUPER SHIFT.*\+.*B.*→.*Browser/)) prio = 3
+    if (match(line, /File manager/) && !match(line, /File manager \(cwd\)/))  prio = 4
+    if (match(line, /Launch apps/))  prio = 5
+    if (match(line, /System menu/))  prio = 6
+    if (match(line, /Theme menu/))  prio = 7
+    if (match(line, /Full screen/))  prio = 8
+    if (match(line, /Full width/))  prio = 9
+    if (match(line, /Close window/))  prio = 10
+    if (match(line, /Close all windows/))  prio = 11
+    if (match(line, /Lock system/))  prio = 12
+    if (match(line, /Toggle window floating/))  prio = 13
+    if (match(line, /Toggle window split/))  prio = 14
+    if (match(line, /Pop window/))  prio = 15
+    if (match(line, /Universal/))  prio = 16
+    if (match(line, /Clipboard/))  prio = 17
+    if (match(line, /Audio controls/))  prio = 18
+    if (match(line, /Bluetooth controls/))  prio = 19
+    if (match(line, /Wifi controls/))  prio = 20
+    if (match(line, /Emojis/))  prio = 21
+    if (match(line, /Color picker/))  prio = 22
+    if (match(line, /Screenshot/))  prio = 23
+    if (match(line, /Screenrecording/))  prio = 24
+    if (match(line, /Tmux/)) prio = 25
+    if (match(line, /Herdr/)) prio = 26
+    if (match(line, /SUPER SHIFT.*\+.*B.*→.*Browser/)) prio = 27
+    if (match(line, /File manager \(cwd\)/))  prio = 28
+    if (match(line, /(Switch|Next|Former|Previous).*workspace/))  prio = 29
+    if (match(line, /Move window to workspace/))  prio = 30
+    if (match(line, /Move window silently to workspace/))  prio = 31
+    if (match(line, /Swap window/))  prio = 32
+    if (match(line, /Focus/))  prio = 33
+    if (match(line, /Move window$/))  prio = 34
+    if (match(line, /Resize window/))  prio = 35
+    if (match(line, /Expand window/))  prio = 36
+    if (match(line, /Shrink window/))  prio = 37
+    if (match(line, /scratchpad/))  prio = 38
+    if (match(line, /notification/))  prio = 39
+    if (match(line, /Toggle window transparency/))  prio = 40
+    if (match(line, /Toggle workspace gaps/))  prio = 41
+    if (match(line, /Toggle nightlight/))  prio = 42
+    if (match(line, /Toggle locking/))  prio = 43
+    if (match(line, /group/))  prio = 94
+    if (match(line, /Scroll active workspace/))  prio = 95
+    if (match(line, /Cycle to/))  prio = 96
+    if (match(line, /Reveal active/))  prio = 97
+    if (match(line, /Apple Display/))  prio = 98
+    if (match(line, /XF86/))  prio = 99
+    if (match(line, /Tmux keybindings/)) prio = 100
+    if (match(line, /Herdr keybindings/)) prio = 101
+
+    # print "priority<TAB>record"
+    printf "%d\t%s\n", prio, $0
+  }' |
+  sort -k1,1n -k2,2 |
+  cut -f2-
+}
+
+output_binding_records_uncached() {
+  local dynamic
+
+  dynamic=$(dynamic_bindings)
+
+  {
+    [[ -n $dynamic ]] && printf '%s\n' "$dynamic"
+    static_bindings
+  } |
+    sort -u |
+    parse_keycodes |
+    parse_binding_records |
+    prioritize_entries
+
+  # Fail when no bind file could be read so that is never cached.
+  [[ -n $dynamic ]]
+}
+
+keybindings_cache_key() {
+  {
+    printf 'v12\n'
+    mmsg get keyboardlayout 2>/dev/null
+    cat "${BIND_FILES[@]}" 2>/dev/null
+  } | sha256sum | awk '{ print $1 }'
+}
+
+refresh_keybindings_cache() {
+  local cache_dir="$1"
+  local cache_file="$2"
+  local cache_name="$3"
+  local tmp_file
+
+  tmp_file=$(mktemp "$cache_dir/keybindings.XXXXXX") || return 1
+
+  if output_binding_records_uncached >"$tmp_file"; then
+    mv "$tmp_file" "$cache_file"
+    find "$cache_dir" -maxdepth 1 -type f -name 'keybindings-*.records' ! -name "$cache_name" -delete 2>/dev/null || true
+  else
+    rm -f "$tmp_file"
+    return 1
+  fi
+}
+
+output_binding_records() {
+  local cache_dir cache_file cache_name
+
+  cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/doxia"
+  cache_name="keybindings-$(keybindings_cache_key).records"
+  cache_file="$cache_dir/$cache_name"
+
+  if [[ -s $cache_file ]]; then
+    cat "$cache_file"
+  elif mkdir -p "$cache_dir" 2>/dev/null && refresh_keybindings_cache "$cache_dir" "$cache_file" "$cache_name"; then
+    cat "$cache_file"
+  else
+    output_binding_records_uncached
+  fi
+}
+
+output_keybindings() {
+  output_binding_records | cut -f1
+}
+
+trim() {
+  local value="$1"
+
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+
+  printf '%s\n' "$value"
+}
+
+dispatch_binding() {
+  local dispatcher="$1"
+  local arg="$2"
+
+  case "$dispatcher" in
+    "") return 1 ;;
+    keys)
+      # shellcheck disable=SC2086 # wtype flags, split on purpose
+      [[ -n $arg ]] && wtype $arg
+      ;;
+    *)
+      if [[ -n $arg ]]; then
+        mmsg dispatch "$dispatcher,$arg" >/dev/null
+      else
+        mmsg dispatch "$dispatcher" >/dev/null
+      fi
+      ;;
+  esac
+}
+
+if [[ $1 == "--print" || $1 == "-p" ]]; then
+  output_keybindings
+else
+  records=$(output_binding_records)
+  selection=$(cut -f1 <<<"$records" |
+    doxia-menu-select 'Keybindings' -- --width 800 --height 500)
+
+  if [[ -n $selection ]]; then
+    record=$(awk -F '\t' -v selection="$selection" '$1 == selection { print; exit }' <<<"$records")
+    dispatcher=$(cut -f2 <<<"$record")
+    arg=$(cut -f3- <<<"$record")
+
+    dispatch_binding "$dispatcher" "$arg"
+  fi
+fi

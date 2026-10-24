@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# doxia:summary=Display the DoxIA wordmark in the terminal (DOX in the text color, red IA).
+
+# The colored wordmark is pre-rendered with 24-bit colors so it never depends on
+# the terminal palette (the old version painted logo.txt with ANSI green, \e[32m).
+LOGO_ANSI="$HOME/.config/doxia/branding/logo.ansi"
+
+clear
+echo
+# Fedora port: the brand as an image in terminals that draw images (see
+# fedora/doxia/term-graphics), the ANSI wordmark elsewhere.
+if "$DOXIA_PATH/lib/show-brand"; then
+  :
+elif [[ -r $LOGO_ANSI ]]; then
+  cat <"$LOGO_ANSI"
+else
+  printf '\033[1;39m'
+  cat <$DOXIA_PATH/logo.txt
+  printf '\033[0m'
+fi
+echo
+echo

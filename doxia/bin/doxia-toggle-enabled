@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# doxia:summary=Check if a toggle is enabled (flag file exists)
+# doxia:args=<flag-name>
+
+[[ -f "$HOME/.local/state/doxia/toggles/$1" ]]

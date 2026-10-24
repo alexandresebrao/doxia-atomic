@@ -1,0 +1,8 @@
+[Desktop Entry]
+Version=1.0
+Name=Discord
+Exec=doxia-launch-webapp https://discord.com/channels/@me
+Terminal=false
+Type=Application
+Icon=doxia-discord
+StartupNotify=true

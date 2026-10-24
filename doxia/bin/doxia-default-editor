@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# doxia:summary=Set the default editor used by doxia-launch-editor
+# doxia:args=[code|cursor|zed|sublime_text|helix|vim|nano|emacs|nvim]
+# doxia:examples=doxia default editor | doxia default editor code | doxia default editor helix
+
+editor_file="$HOME/.local/state/doxia/defaults/editor"
+
+if (($# == 0)); then
+  if [[ -f $editor_file ]]; then
+    read -r editor <"$editor_file"
+  fi
+
+  [[ -n $editor ]] && echo "$editor" || echo "nvim"
+  exit 0
+fi
+
+case "$1" in
+code) editor="code"; name="VSCode"; glyph= ;;
+cursor) editor="cursor"; name="Cursor"; glyph= ;;
+zed | zeditor) editor="zeditor"; name="Zed"; glyph= ;;
+sublime_text) editor="sublime_text"; name="Sublime Text"; glyph= ;;
+helix) editor="helix"; name="Helix"; glyph= ;;
+vim) editor="vim"; name="Vim"; glyph= ;;
+nano) editor="nano"; name="Nano"; glyph= ;;
+emacs) editor="emacs"; name="Emacs"; glyph= ;;
+nvim) editor="nvim"; name="Neovim"; glyph= ;;
+*)
+  echo "Usage: doxia-default-editor <code|cursor|zed|sublime_text|helix|vim|nano|emacs|nvim>"
+  exit 1
+  ;;
+esac
+
+mkdir -p "$(dirname "$editor_file")"
+printf '%s\n' "$editor" >"$editor_file"
+
+doxia-notification-send -g $glyph "$name agora é o editor padrão"

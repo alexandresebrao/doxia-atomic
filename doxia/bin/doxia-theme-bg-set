@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# doxia:summary=Set the current background image
+# doxia:args=<path-to-image>
+# doxia:examples=doxia theme bg set ~/Pictures/background.png
+
+if [[ -z $1 ]]; then
+  echo "Usage: doxia-theme-bg-set <path-to-image>" >&2
+  exit 1
+fi
+
+BACKGROUND="$(realpath "$1")"
+CURRENT_BACKGROUND_LINK="$HOME/.local/state/doxia/current/background"
+
+if [[ ! -f $BACKGROUND ]]; then
+  echo "File does not exist: $BACKGROUND" >&2
+  exit 1
+fi
+
+# Create symlink to the new background
+ln -nsf "$BACKGROUND" "$CURRENT_BACKGROUND_LINK"
+
+# Update the live shell background immediately when it is running. The
+# background plugin also polls this symlink, but IPC avoids the visible delay.
+doxia-shell-call -q background set "$BACKGROUND"

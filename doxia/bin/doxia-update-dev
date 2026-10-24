@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# doxia:summary=Update the active DoxIA dev checkout
+
+set -euo pipefail
+
+[[ $DOXIA_PATH != "/usr/share/doxia" ]] || exit 0
+
+if ! git -C "$DOXIA_PATH" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Error: DOXIA_PATH is not a git checkout: $DOXIA_PATH" >&2
+  exit 1
+fi
+
+upstream=$(git -C "$DOXIA_PATH" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)
+if [[ -z $upstream ]]; then
+  echo -e "\e[33m\nSkip DoxIA dev checkout update (current branch has no upstream)\e[0m"
+  exit 0
+fi
+
+echo -e "\e[32m\nUpdate DoxIA dev checkout\e[0m"
+# --autostash keeps uncommitted local edits across the update. When they clash with
+# upstream, git still exits 0 but leaves conflict markers, which the update scripts
+# would then run: put the upstream version of those files back, and leave the local
+# edits in the stash.
+git -C "$DOXIA_PATH" fetch --quiet
+if git -C "$DOXIA_PATH" merge-base --is-ancestor HEAD '@{upstream}'; then
+  git -C "$DOXIA_PATH" merge --ff-only --autostash '@{upstream}'
+else
+  # Local commits not upstream yet: replay them on top. Only a real conflict
+  # stops the update, and then the checkout is put back as it was.
+  echo "Rebasing local commits onto $upstream"
+  # Rewriting them needs a committer; with no git identity set, reuse the one
+  # that made the latest local commit.
+  if [[ -z $(git -C "$DOXIA_PATH" config user.email) ]]; then
+    export GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
+    GIT_COMMITTER_NAME=$(git -C "$DOXIA_PATH" log -1 --format=%cn)
+    GIT_COMMITTER_EMAIL=$(git -C "$DOXIA_PATH" log -1 --format=%ce)
+  fi
+  if ! git -C "$DOXIA_PATH" rebase --autostash '@{upstream}'; then
+    git -C "$DOXIA_PATH" rebase --abort 2>/dev/null || true
+    echo -e "\e[31mCould not rebase local commits onto $upstream (see above); the checkout is unchanged. Resolve by hand with: git rebase $upstream\e[0m" >&2
+    exit 1
+  fi
+fi
+conflicted=$(git -C "$DOXIA_PATH" diff --name-only --diff-filter=U)
+if [[ -n $conflicted ]]; then
+  mapfile -t files <<<"$conflicted"
+  git -C "$DOXIA_PATH" checkout HEAD -- "${files[@]}"
+  git -C "$DOXIA_PATH" reset -q
+  echo -e "\e[33mLocal changes to these files clashed with the update and were set aside in $(git -C "$DOXIA_PATH" rev-parse --short stash@{0}) (git stash list):\e[0m"
+  printf '  %s\n' "${files[@]}"
+fi

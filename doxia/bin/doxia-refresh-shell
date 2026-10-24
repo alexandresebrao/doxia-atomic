@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# doxia:summary=Reset shell.json to DoxIA defaults
+# doxia:examples=doxia refresh shell
+
+set -euo pipefail
+
+doxia-refresh-config doxia/shell.json
+doxia-bar defaults
+
+doxia-restart-shell

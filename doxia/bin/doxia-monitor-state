@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# doxia:summary=Print monitor panel state for the shell
+# doxia:group=monitor
+
+# wlr-randr lists disabled outputs too; mango's IPC only knows the live ones
+# but is the one that knows which has focus.
+outputs_json=$(wlr-randr --json 2>/dev/null || echo '[]')
+focused_monitor=$(doxia-mango-monitor-focused 2>/dev/null | head -n 1)
+
+{ doxia-brightness-display --monitor "$focused_monitor" 2>/dev/null; echo; } | head -n 1
+
+# mango has no output mirroring: doxia-mango-monitor-internal-mirror runs
+# wl-mirror onto the first enabled external monitor.
+mirror_pid_file="${XDG_RUNTIME_DIR:-/tmp}/doxia-monitor-mirror.pid"
+mirror_target=""
+if [[ -f $mirror_pid_file ]] && kill -0 "$(<"$mirror_pid_file")" 2>/dev/null; then
+  mirror_target=external
+fi
+
+printf '%s\n' "$outputs_json" | jq -r --arg mirror "$mirror_target" '
+  def internal: test("^(eDP|LVDS|DSI)-");
+  ([.[] | select(.name | internal)][0].name // ""),
+  ([.[] | select((.name | internal) | not)][0].name // ""),
+  ([.[] | select((.name | internal) and .enabled == true)][0].name // ""),
+  (if $mirror == "" then "" else ([.[] | select(((.name | internal) | not) and .enabled == true)][0].name // "") end)
+'
+
+printf '%s\n' "$focused_monitor"
+doxia-mango-monitor-scaling 2>/dev/null || echo
+
+printf '%s\n' "$outputs_json" | jq -c --arg focused "$focused_monitor" '
+  [.[] | . as $o | ([.modes[]? | select(.current == true)][0] // {}) as $mode | {
+    name,
+    enabled: (.enabled == true),
+    focused: (.name == $focused),
+    width: ($mode.width // 0),
+    height: ($mode.height // 0)
+  }]'

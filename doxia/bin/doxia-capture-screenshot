@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# doxia:summary=Take a screenshot
+# doxia:group=capture
+# doxia:args=[smart|region|windows|fullscreen] [slurp|copy|save] [--editor=<name>]
+# doxia:examples=doxia screenshot | doxia capture screenshot region
+# doxia:aliases=doxia screenshot
+
+[[ -f ~/.config/user-dirs.dirs ]] && source ~/.config/user-dirs.dirs
+OUTPUT_DIR="${DOXIA_SCREENSHOT_DIR:-${XDG_PICTURES_DIR:-$HOME/Pictures}}"
+
+if [[ ! -d $OUTPUT_DIR ]]; then
+  mkdir -p "$OUTPUT_DIR"
+  doxia-notification-send "Diretório de capturas de tela criado: $OUTPUT_DIR" -t 2000
+fi
+
+pkill slurp && exit 0
+
+SCREENSHOT_EDITOR="${DOXIA_SCREENSHOT_EDITOR:-tensaku-edit}"
+
+# Parse --editor flag from any position
+ARGS=()
+for arg in "$@"; do
+  if [[ $arg == --editor=* ]]; then
+    SCREENSHOT_EDITOR="${arg#--editor=}"
+  else
+    ARGS+=("$arg")
+  fi
+done
+set -- "${ARGS[@]}"
+
+MODE="${1:-smart}"
+PROCESSING="${2:-slurp}"
+
+# The picker leaves the screen freeze running (PID on its first output line)
+# so grim captures the frozen overlay rather than live content shifting
+# during teardown.
+
+cleanup() {
+  [[ -n $FREEZE_PID ]] && kill $FREEZE_PID 2>/dev/null
+}
+trap cleanup EXIT
+
+{ read -r FREEZE_PID; read -r SELECTION; } < <(doxia-capture-region "$MODE" --keep-freeze)
+
+[[ -z $SELECTION ]] && exit 0
+
+FILENAME="screenshot-$(date +'%Y-%m-%d_%H-%M-%S').png"
+FILEPATH="$OUTPUT_DIR/$FILENAME"
+
+case "$PROCESSING" in
+  slurp)
+    grim -g "$SELECTION" "$FILEPATH" || exit 1
+    echo "$FILEPATH"
+    wl-copy --type image/png <"$FILEPATH"
+
+    # Best-effort: the screenshot is already saved and on the clipboard, so a
+    # notification outage must not report the capture itself as failed.
+    doxia-notification-send "Captura de tela salva na área de transferência e em arquivo" "Edite com Super + Alt + , (ou clique aqui)" \
+      --image "$FILEPATH" \
+      --exec "$SCREENSHOT_EDITOR" "$FILEPATH" || true
+    ;;
+  copy)
+    grim -g "$SELECTION" - | wl-copy --type image/png
+    ;;
+  save)
+    grim -g "$SELECTION" "$FILEPATH" || exit 1
+    echo "$FILEPATH"
+    ;;
+esac

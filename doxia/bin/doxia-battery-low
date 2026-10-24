@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# doxia:summary=Send the low battery warning notification and run battery-low hooks.
+# doxia:args=<percentage>
+# doxia:hidden=true
+
+set -euo pipefail
+
+if (($# != 1)); then
+  echo "Usage: doxia-battery-low <percentage>" >&2
+  exit 1
+fi
+
+level=$1
+
+doxia-notification-send -g 󱐋 -u critical "Hora de recarregar!" "Bateria em ${level}%" -i battery-caution -t 30000
+doxia-hook battery-low "$level"

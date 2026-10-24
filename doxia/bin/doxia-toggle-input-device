@@ -1,0 +1,67 @@
+#!/bin/bash
+
+# doxia:summary=Enable, disable, or toggle the touchpad or touchscreen
+# doxia:args=<touchpad|touchscreen> [on|off|toggle]
+# doxia:hidden=true
+
+KIND="${1:-}"
+ACTION="${2:-toggle}"
+
+usage() {
+  echo "Usage: doxia-toggle-input-device <touchpad|touchscreen> [on|off|toggle]" >&2
+}
+
+# mango turns these off per kind, not per device: disable_trackpad covers every
+# touchpad, touch_enable every touchscreen. The disabled options live in
+# ~/.local/state/doxia/toggles/mango/input.conf, which config.conf sources,
+# so they survive reloads and logins.
+case "$KIND" in
+  touchpad) LABEL="Touchpad" ICON="touchpad" OPTION="disable_trackpad=1" ;;
+  touchscreen) LABEL="Tela sensível ao toque" ICON="touch" OPTION="touch_enable=0" ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac
+
+TOGGLES_FILE="$HOME/.local/state/doxia/toggles/mango/input.conf"
+
+disabled() {
+  grep -Fxqs "$OPTION" "$TOGGLES_FILE"
+}
+
+apply() {
+  mmsg dispatch reload_config >/dev/null 2>&1 || true
+}
+
+enable() {
+  if [[ -f $TOGGLES_FILE ]]; then
+    sed -i "/^${OPTION}\$/d" "$TOGGLES_FILE"
+  fi
+  apply
+  doxia-osd -i "$ICON" -m "$LABEL ativado"
+}
+
+disable() {
+  if [[ -z $("doxia-hw-$KIND") ]]; then
+    echo "No $KIND device found" >&2
+    exit 1
+  fi
+
+  if ! disabled; then
+    mkdir -p "$(dirname "$TOGGLES_FILE")"
+    printf '%s\n' "$OPTION" >>"$TOGGLES_FILE"
+  fi
+  apply
+  doxia-osd -i "$ICON" -m "$LABEL desativado"
+}
+
+case "$ACTION" in
+  on) enable ;;
+  off) disable ;;
+  toggle) if disabled; then enable; else disable; fi ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac

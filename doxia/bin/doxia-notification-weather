@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# doxia:summary=Toggle the current weather panel
+
+doxia-shell-call shell toggle doxia.weather

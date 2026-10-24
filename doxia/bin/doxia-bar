@@ -1,0 +1,395 @@
+#!/bin/bash
+
+# doxia:summary=Configure the bar and its widget layout
+# doxia:group=bar
+# doxia:args=defaults | position <top|bottom|left|right> | transparent <true|false|toggle> | put <id> [placement] | remove <id> | move <id> [placement] | set <id> <key> <value> [--json] [placement]
+# doxia:examples=doxia bar put doxia.keyboard-layout --after doxia.clock | doxia bar move doxia.clock --section center --index 0 | doxia bar set doxia.clock format HH:mm
+
+set -euo pipefail
+
+source doxia-shell-config
+
+usage() {
+  cat <<USAGE
+Usage: doxia bar <command> [args...]
+
+  defaults                             Restore the default bar and service widgets
+  position <top|bottom|left|right>     Bar position
+  transparent <true|false|toggle>      Bar transparency
+  put <id> [placement]                 Put a widget on the bar, leaving one
+                                       that is already there where it is
+  remove <id>                          Take a widget off the bar
+  move <id> [placement]                Move a widget within or between sections
+  set <id> <key> <value> [--json] [placement]
+                                       Set a per-widget option
+
+Placement:
+  --section <left|center|right>        Target section
+  --index <n>                          Target index
+  --before <id>                        Insert before a widget
+  --after <id>                         Insert after a widget
+  --from-section <section>             Source section
+  --from-index <n>                     Source index
+
+'put' leaves a widget that is already on the bar where it is, and falls back
+to the widget's usual spot when --before / --after names a widget the bar
+does not carry.
+
+Examples:
+  doxia bar put doxia.keyboard-layout --after doxia.clock
+  doxia bar move doxia.media left
+  doxia bar move doxia.clock --section center --index 0
+  doxia bar set doxia.clock format HH:mm
+USAGE
+}
+
+# ------------------------------------------------------------------ validation
+
+validate_section() {
+  [[ $1 =~ ^(left|center|right)$ ]] || fail "section must be left, center, or right"
+}
+
+validate_index() {
+  [[ $1 =~ ^[0-9]+$ ]] || fail "index must be a non-negative integer"
+}
+
+# --------------------------------------------------------------------- placement
+
+PLACEMENT_SECTION=""
+PLACEMENT_INDEX=""
+PLACEMENT_BEFORE=""
+PLACEMENT_AFTER=""
+PLACEMENT_FROM_SECTION=""
+PLACEMENT_FROM_INDEX=""
+
+parse_placement() {
+  while (( $# > 0 )); do
+    case "$1" in
+      --section)
+        PLACEMENT_SECTION="${2:-}"
+        validate_section "$PLACEMENT_SECTION"
+        shift 2
+        ;;
+      --index)
+        PLACEMENT_INDEX="${2:-}"
+        validate_index "$PLACEMENT_INDEX"
+        shift 2
+        ;;
+      --before)
+        PLACEMENT_BEFORE="${2:-}"
+        [[ -n $PLACEMENT_BEFORE ]] || fail "--before requires a widget id"
+        shift 2
+        ;;
+      --after)
+        PLACEMENT_AFTER="${2:-}"
+        [[ -n $PLACEMENT_AFTER ]] || fail "--after requires a widget id"
+        shift 2
+        ;;
+      --from-section)
+        PLACEMENT_FROM_SECTION="${2:-}"
+        validate_section "$PLACEMENT_FROM_SECTION"
+        shift 2
+        ;;
+      --from-index)
+        PLACEMENT_FROM_INDEX="${2:-}"
+        validate_index "$PLACEMENT_FROM_INDEX"
+        shift 2
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        fail "unknown option: $1"
+        ;;
+    esac
+  done
+
+  [[ -z $PLACEMENT_BEFORE || -z $PLACEMENT_AFTER ]] || fail "use only one of --before or --after"
+}
+
+placement_json() {
+  jq -cn \
+    --arg section "$PLACEMENT_SECTION" \
+    --arg index "$PLACEMENT_INDEX" \
+    --arg before "$PLACEMENT_BEFORE" \
+    --arg after "$PLACEMENT_AFTER" \
+    --arg fromSection "$PLACEMENT_FROM_SECTION" \
+    --arg fromIndex "$PLACEMENT_FROM_INDEX" '
+      {}
+      + (if $section == "" then {} else {section: $section} end)
+      + (if $index == "" then {} else {index: ($index | tonumber)} end)
+      + (if $before == "" then {} else {before: $before} end)
+      + (if $after == "" then {} else {after: $after} end)
+      + (if $fromSection == "" then {} else {fromSection: $fromSection} end)
+      + (if $fromIndex == "" then {} else {fromIndex: ($fromIndex | tonumber)} end)
+    '
+}
+
+# -------------------------------------------------------------------- commands
+
+cmd_defaults() {
+  (( $# == 0 )) || fail "defaults does not take arguments"
+
+  local optional_widgets="[]"
+  local service widget
+  for service in dropbox tailscale; do
+    if "doxia-installed-service-$service"; then
+      widget=$(jq -cn \
+        --arg id "doxia.$service" \
+        --arg section "$(bar_widget_default_section "doxia.$service")" \
+        '{id: $id, section: $section}')
+      optional_widgets=$(jq -c --argjson widget "$widget" '. + [$widget]' <<<"$optional_widgets")
+    fi
+  done
+
+  # This remains one file mutation so it also works during the headless
+  # Quattro upgrade and cannot race the shell's in-memory config.
+  commit "$NORMALIZE
+    | .bar = \$defaults[0].bar
+    | def entry_id: if type == \"object\" then (.id // \"\" | tostring) else tostring end;
+      def anchor_for(\$section): { left: \"doxia.workspaces\", center: \"doxia.weather\", right: \"doxia.tray\" }[\$section];
+      reduce \$widgets[] as \$widget (.;
+        .bar.layout.left = (.bar.layout.left | map(select(entry_id != \$widget.id)))
+        | .bar.layout.center = (.bar.layout.center | map(select(entry_id != \$widget.id)))
+        | .bar.layout.right = (.bar.layout.right | map(select(entry_id != \$widget.id)))
+        | (.bar.layout[\$widget.section] | map(entry_id) | index(anchor_for(\$widget.section))) as \$anchor
+        | (\$anchor | if . == null then (.bar.layout[\$widget.section] | length) else . + 1 end) as \$index
+        | .bar.layout[\$widget.section] = (
+            .bar.layout[\$widget.section][0:\$index]
+            + [{id: \$widget.id}]
+            + .bar.layout[\$widget.section][\$index:]
+          )
+      )
+  " \
+    --slurpfile defaults "$DEFAULTS_FILE" \
+    --argjson widgets "$optional_widgets"
+  echo "Restored the default DoxIA bar"
+}
+
+cmd_position() {
+  local position="${1:-}"
+  [[ -n $position ]] || fail "position is required"
+  (( $# == 1 )) || fail "position takes a single value"
+  [[ $position =~ ^(top|bottom|left|right)$ ]] || fail "position must be top, bottom, left, or right"
+  commit "$NORMALIZE | .bar.position = \$position" --arg position "$position"
+  echo "Bar position set to $position"
+}
+
+cmd_transparent() {
+  local transparent="${1:-}"
+  [[ -n $transparent ]] || fail "transparent is required"
+  (( $# == 1 )) || fail "transparent takes a single value"
+  [[ $transparent =~ ^(true|false|toggle)$ ]] || fail "transparent must be true, false, or toggle"
+  if [[ $transparent == "toggle" ]]; then
+    commit "$NORMALIZE | .bar.transparent = (.bar.transparent != true)"
+    echo "Bar transparency toggled"
+  else
+    commit "$NORMALIZE | .bar.transparent = \$transparent" --argjson transparent "$transparent"
+    echo "Bar transparency set to $transparent"
+  fi
+}
+
+# Where a widget goes when no placement says: its side of the bar.
+bar_widget_default_section() {
+  case $1 in
+    doxia.emblem | doxia.workspaces | doxia.menu | doxia.workspaces) echo "left" ;;
+    doxia.media | doxia.screenshare | doxia.keyboard-layout | doxia.weather | doxia.system-update) echo "center" ;;
+    *) echo "right" ;;
+  esac
+}
+
+# The bar's layout, edited in shell.json the way Quickshell's plugin registry
+# did (doxia-shell's bar rereads the file): a widget is found by id, in a
+# section when one is named; --before/--after place it next to another, and
+# a section alone after the section's anchor widget, or at its end.
+LAYOUT='
+  def eid: if type == "object" then (.id // "" | tostring) else tostring end;
+  def locate($id; $section):
+    first((if $section == "" then ["left", "center", "right"] else [$section] end)[] as $s
+      | (.bar.layout[$s] | map(eid) | index($id)) as $i
+      | select($i != null) | {section: $s, index: $i}) // null;
+  def target($p; $fallback):
+    (($p.section // "") | if IN("left", "center", "right") then . else $fallback end) as $section
+    | ($p.before // $p.after // "") as $relative
+    | if $relative != "" then
+        locate($relative; if ($p.section // "") != "" then $section else "" end) as $at
+        | if $at == null then error("could not find target widget \($relative)")
+          else {section: $at.section, index: ($at.index + (if $p.after then 1 else 0 end))} end
+      elif $p.index != null then
+        {section: $section, index: ([([($p.index | floor), 0] | max), (.bar.layout[$section] | length)] | min)}
+      else
+        ({left: "doxia.workspaces", center: "doxia.weather", right: "doxia.tray"}[$section]) as $anchor
+        | locate($anchor; $section) as $at
+        | {section: $section, index: (if $at then $at.index + 1 else (.bar.layout[$section] | length) end)}
+      end;
+  def insert($at; $entry): .bar.layout[$at.section] |= (.[:$at.index] + [$entry] + .[$at.index:]);
+  def at_index($section; $index; $id):
+    if $section == "" then error("index requires section") else . end
+    | ($index | floor) as $n
+    | if (.bar.layout[$section] | type) != "array" or $n < 0 or $n >= (.bar.layout[$section] | length) then
+        error("no widget at \($section)[\($n)]")
+      elif (.bar.layout[$section][$n] | eid) != $id then error("widget at \($section)[\($n)] is not \($id)")
+      else {section: $section, index: $n} end;
+'
+
+# Runs a layout edit; its error() becomes the command's failure.
+edit_layout() {
+  local program="$1" out error
+  shift
+  out=$(jq -c "$@" "$NORMALIZE | $LAYOUT try {config: ($program)} catch {error: .}" "$(source_file)") ||
+    fail "could not update shell config"
+  error=$(jq -r '.error // empty' <<<"$out")
+  [[ -z $error ]] || fail "$error"
+  mkdir -p "$(dirname "$CONFIG_FILE")"
+  _SHELL_CONFIG_TMP=$(mktemp)
+  jq -S '.config' <<<"$out" >"$_SHELL_CONFIG_TMP" || fail "could not update shell config"
+  mv "$_SHELL_CONFIG_TMP" "$CONFIG_FILE"
+  _SHELL_CONFIG_TMP=""
+  refresh_shell_config
+}
+
+cmd_put() {
+  local id="${1:-}"
+  [[ -n $id ]] || fail "put requires a widget id"
+  shift
+
+  local positional_section=""
+  if (( $# > 0 )) && [[ $1 != --* ]]; then
+    positional_section="$1"
+    validate_section "$positional_section"
+    shift
+  fi
+
+  parse_placement "$@"
+  [[ -z $positional_section || -z $PLACEMENT_SECTION ]] ||
+    fail "specify a section positionally or with --section, not both"
+  [[ -z $positional_section ]] || PLACEMENT_SECTION="$positional_section"
+  [[ -z $PLACEMENT_FROM_SECTION && -z $PLACEMENT_FROM_INDEX ]] ||
+    fail "put does not accept --from-section or --from-index"
+
+  # Left where it is when on the bar already; a neighbour the bar doesn't
+  # carry means the widget's usual spot.
+  edit_layout '
+    if locate($id; "") then .
+    else
+      (if ($p.before // $p.after // "") != "" and locate($p.before // $p.after; $p.section // "") == null
+       then $p | del(.before, .after) else $p end) as $p
+      | insert(target($p; $default); {id: $id})
+    end' \
+    --arg id "$id" --argjson p "$(placement_json)" --arg default "$(bar_widget_default_section "$id")"
+  echo "$id is on the bar"
+}
+
+cmd_remove() {
+  local id="${1:-}"
+  [[ -n $id ]] || fail "remove requires a widget id"
+  (( $# == 1 )) || fail "remove takes a single widget id"
+  edit_layout '.bar.layout[] |= map(select(eid != $id))' --arg id "$id"
+  echo "$id is off the bar"
+}
+
+cmd_move() {
+  local id="${1:-}"
+  [[ -n $id ]] || fail "move requires a widget id"
+  shift
+
+  local positional_section=""
+  if (( $# > 0 )) && [[ $1 != --* ]]; then
+    positional_section="$1"
+    validate_section "$positional_section"
+    shift
+  fi
+
+  parse_placement "$@"
+  [[ -z $positional_section || -z $PLACEMENT_SECTION ]] ||
+    fail "specify a section positionally or with --section, not both"
+  [[ -z $positional_section || -z $PLACEMENT_INDEX ]] ||
+    fail "specify a section positionally or use --index, not both"
+  [[ -z $positional_section || -z $PLACEMENT_BEFORE ]] ||
+    fail "specify a section positionally or use --before, not both"
+  [[ -z $positional_section || -z $PLACEMENT_AFTER ]] ||
+    fail "specify a section positionally or use --after, not both"
+  [[ -z $positional_section ]] || PLACEMENT_SECTION="$positional_section"
+
+  edit_layout '
+    (if $p.fromIndex != null then at_index($p.fromSection // ""; $p.fromIndex; $id)
+     else locate($id; $p.fromSection // "") // error("could not find widget \($id)") end) as $from
+    | .bar.layout[$from.section][$from.index] as $entry
+    | .bar.layout[$from.section] |= del(.[$from.index])
+    | insert(target($p; $from.section); $entry)' \
+    --arg id "$id" --argjson p "$(placement_json)"
+  echo "Moved $id"
+}
+
+cmd_set() {
+  local id="${1:-}"
+  local key="${2:-}"
+  local value="${3:-}"
+  [[ -n $id ]] || fail "set requires a widget id"
+  [[ -n $key ]] || fail "set requires a setting key"
+  (( $# >= 3 )) || fail "set requires a value"
+  shift 3
+
+  local value_is_json="false"
+  if (( $# > 0 )) && [[ $1 == "--json" ]]; then
+    value_is_json="true"
+    shift
+  fi
+  parse_placement "$@"
+  [[ -z $PLACEMENT_BEFORE && -z $PLACEMENT_AFTER ]] ||
+    fail "set does not accept --before or --after"
+
+  local value_json
+  if [[ $value_is_json == "true" ]]; then
+    value_json=$(jq -cn --argjson value "$value" '$value') ||
+      fail "invalid JSON value: $value"
+  else
+    value_json=$(jq -cn --arg value "$value" '$value')
+  fi
+
+  edit_layout '
+    ($p.fromSection // $p.section // "") as $section
+    | ($p.fromIndex // $p.index) as $index
+    | (if $index != null then at_index($section; $index; $id)
+       else locate($id; $section) // error("could not find widget \($id)") end) as $at
+    | if (.bar.layout[$at.section][$at.index] | type) != "object" then error("widget entry must be an object")
+      else .bar.layout[$at.section][$at.index][$key] = $value end' \
+    --arg id "$id" --arg key "$key" --argjson value "$value_json" --argjson p "$(placement_json)"
+  echo "Set $key on $id"
+}
+
+# --------------------------------------------------------------------- dispatch
+
+command="${1:-}"
+(( $# > 0 )) && shift || true
+
+case "$command" in
+  defaults)
+    cmd_defaults "$@"
+    ;;
+  position)
+    cmd_position "$@"
+    ;;
+  transparent)
+    cmd_transparent "$@"
+    ;;
+  put)
+    cmd_put "$@"
+    ;;
+  remove)
+    cmd_remove "$@"
+    ;;
+  move)
+    cmd_move "$@"
+    ;;
+  set)
+    cmd_set "$@"
+    ;;
+  -h | --help | help | "")
+    usage
+    ;;
+  *)
+    fail "unknown command: $command"
+    ;;
+esac

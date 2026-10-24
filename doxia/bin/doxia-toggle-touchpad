@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# doxia:summary=Enable, disable, or toggle the touchpad
+# doxia:args=[on|off|toggle]
+
+exec doxia-toggle-input-device touchpad "${1:-toggle}"

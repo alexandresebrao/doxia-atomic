@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# doxia:summary=Reload the mango configuration (used by the DoxIA theme switching).
+
+mmsg dispatch reload_config >/dev/null 2>&1 || true

@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Draws the DoxIA brand image on its own lines, INDENT columns in (default 0), and
+# fails without printing anything when the terminal shows no Kitty graphics, so
+# the caller can print the ASCII wordmark instead. Used by the terminal greeting
+# and doxia-show-logo.
+
+indent=${1:-0}
+dir=$(dirname "$(readlink -f "$0")")
+brand=$("$dir/brand-image")
+
+[[ -t 1 ]] || exit 1
+"$dir/term-graphics" >/dev/null || exit 1
+
+/usr/bin/fastfetch --logo "$brand" --logo-type kitty --logo-width 46 \
+  --logo-position top --logo-padding-left "$indent" --logo-padding-top 0 --structure break

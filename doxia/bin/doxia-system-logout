@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# doxia:summary=Log out after closing application windows
+# doxia:examples=doxia logout | doxia system logout
+# doxia:aliases=doxia logout
+
+nohup bash -c "sleep 2 && uwsm stop" >/dev/null 2>&1 &
+
+doxia-osd -i logout -m "Saindo da sessão" -d 5000
+
+# Now close all windows
+doxia-mango-window-close-all
+sleep 1 # Allow apps like Chrome to shutdown correctly

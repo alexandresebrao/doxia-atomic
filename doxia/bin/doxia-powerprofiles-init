@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# doxia:summary=Set the correct power profile on boot based on current AC/battery state.
+
+exec doxia-powerprofiles-set autodetect

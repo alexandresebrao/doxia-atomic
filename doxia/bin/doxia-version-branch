@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# doxia:summary=Print the active DoxIA dev-link git branch
+# doxia:hidden=true
+
+doxia_path=${DOXIA_PATH:-/usr/share/doxia}
+doxia_path=${doxia_path%/}
+
+[[ $doxia_path != "/usr/share/doxia" ]] || exit 1
+
+branch=$(git -C "$doxia_path" branch --show-current 2>/dev/null || true)
+if [[ -z $branch ]]; then
+  hash=$(git -C "$doxia_path" rev-parse --short HEAD 2>/dev/null || true)
+  [[ -n $hash ]] || exit 1
+  branch="detached@$hash"
+fi
+
+echo "$branch"

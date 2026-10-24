@@ -1,0 +1,270 @@
+# DoxIA apps in Rust + GTK 4
+
+DoxIA moved off the Quickshell shell (since deleted from the repository) one
+piece at a time; each piece became an app in this Cargo workspace. Notes below
+about living beside Quickshell describe code in doxia-shell (`quickshell.rs`)
+that only matters on a machine still running it.
+
+| Crate | Binary | Replaces |
+| --- | --- | --- |
+| `doxia-theme` | (library) | `shell/Commons` Color and Style: the look, from the current theme |
+| `login` | (library `doxia-login`) | the login and lock screens' look, shared by both: the landscape, the clock, the sign-in pieces, `login.css` |
+| `greeter` | `doxia-greeter` | SDDM and its QML theme: the login screen, a greetd greeter |
+| `atualizar` | `doxia-atualizar` | the `doxia.update` panel (`doxia-launch-update`) |
+| `painel` | `doxia-painel` | the Python/libadwaita Painel Rápido (`fedora/doxia/painel`) |
+| `freeze` | `doxia-freeze` | `hyprpicker -r -z`: the screen freeze under slurp in the capture scripts |
+| `shell` | `doxia-shell` | Quickshell's layer-shell surfaces, one at a time: the OSD, the notifications, the polkit agent, the lock screen, the DoxIA menu, the Start menu and the pickers (clipboard, emojis, images) so far |
+
+The apps run as their own processes, so the update reloading or restarting
+the shell no longer closes them: that is what started this, when the update
+window closed and flickered during the "Configuração do DoxIA" step.
+
+## Look
+
+Each app adds the class `doxia` to its windows and passes its stylesheet to
+`doxia_theme::Styler`, which puts `doxia-theme/src/base.css` (the shell's
+buttons, fields, switches, dropdowns) before it and the color utilities
+after, filling in the `$NAMES` from the theme's `colors.toml`, its
+`shell.toml` (`[controls]`, `[font]`, `[spacing]`) and mango's
+`border_radius`. `Styler::reload` picks up a theme switch.
+
+## Atualizar DoxIA
+
+The update window: same views, texts and actions as the panel. The work stays
+in `bin/` (`doxia-update-run`, `doxia-update-pref`,
+`doxia-update-check`); the window follows the JSON files described in
+`atualizar/src/model.rs`. `--prefs` opens on the preferences, and a second
+launch raises the open window.
+
+## Painel Rápido
+
+Same `painel.json`, credentials, recent pipelines, action types and shortcuts
+as the Python app (see the `/painel` skill), in the shell's look.
+`fedora/doxia/painel` stays the entry point (`doxia-painel` on the PATH, the
+launcher, SUPER+ALT+P): it execs `/usr/local/bin/doxia-painel` when installed
+and runs itself otherwise (`DOXIA_PAINEL_PY=1` forces it). HTTP goes through
+`ureq` (rustls).
+
+## doxia-shell
+
+The long-running half: a GTK application that owns `org.doxia.Shell` on the
+session bus, run by the user unit `fedora/doxia/doxia-shell.service`
+(installed by `install-user-units`, started by mango's autostart, restarted
+if it dies). It answers the shell's IPC calls through
+`org.doxia.Shell.Call(target, method, args)` at `/org/doxia/Shell/Ipc`;
+`bin/doxia-shell-call` forwards them, so callers and key bindings stay as they
+were under Quickshell.
+
+```bash
+busctl --user call org.doxia.Shell /org/doxia/Shell/Ipc org.doxia.Shell \
+  Call ssas notifications toggleDnd 0
+```
+
+- `osd`: `show <json>` (the doxia-osd payload), `close`, `state`, `ping`.
+  Drawn like `shell/plugins/osd` on an overlay layer surface (namespace
+  `doxia-osd`, no keyboard, clicks pass through). Every surface's namespace
+  is `doxia-*`; mango's layer rules (`default/mango/windows.conf`, the
+  themes' `mango-looknfeel.conf`) name them next to Quickshell's.
+- `notifications`: the `org.freedesktop.Notifications` server and its popups,
+  with the IPC of `shell/plugins/notifications` (`dndState`, `toggleDnd`,
+  `setDnd`, `showHistory`, `clear`, `dismissAll`, `dismissOne`, `invokeLast`,
+  `dismiss <summary>`, `ping`). Same lifetimes, do-not-disturb bypasses,
+  replaces_id updates and files under `~/.local/state/doxia/notifications`
+  (popups survive a restart, the last ten are the history), so history carries
+  over between the two servers. The bus name has one owner, and a Quickshell
+  that ever started its notification service keeps it for as long as it runs,
+  dropping what it receives once the plugin is unloaded. So `apply-bar` keeps
+  `doxia.notifications` (and `doxia.polkit`) in `disabledPlugins` where
+  doxia-shell is installed, and back out where it is not; doxia-shell adds
+  them too, and if Quickshell still holds the name 10 s after start it
+  restarts Quickshell once, only when `doxia-mango-session-locked` says the
+  session is unlocked (`doxia-restart-shell` re-locks a session it takes
+  for locked). The bar's DND indicator
+  reads `notifications.json`, which both servers keep.
+
+- polkit: the session's authentication agent, replacing
+  `shell/plugins/polkit` (same card over a scrim, label and fingerprint mode).
+  It registers with polkitd for the user's display session (logind), and again
+  whenever polkitd restarts. Passwords go to polkit's setuid helper
+  (`/usr/lib/polkit-1/polkit-agent-helper-1`) over its line protocol, as
+  libpolkit-agent does when the helper socket is off (Fedora). Quickshell's
+  agent goes the same way as its notifications (`disabledPlugins`; doxia-shell
+  retries until polkitd takes the registration).
+
+  Known limit, Quickshell's agent included: apps run by the user manager (all
+  of them under uwsm) belong to no logind session. polkit 127 maps such a
+  process to the display session when the subject is a pid, but not when it
+  carries a pidfd, which pkexec sends, so pkexec from a GUI app finds no
+  agent ("Error creating textual authentication agent"). Also, a
+  CheckAuthorization with a unix-session subject aborts polkitd 127
+  (assertion in push_subject).
+
+- `lock`: the lock screen, replacing `shell/plugins/lock` (`lock`,
+  `isLocked`, `status`, `preview`, `hidePreview`). ext-session-lock through
+  gtk4-layer-shell's session lock API (FFI to `gtk4-session-lock.h`; the Rust
+  crate has no binding), one view per monitor drawn with `doxia-login` (the
+  login screen's landscape, clock and sign-in).
+  PAM runs in a child, `doxia-shell --pam <service>` (`lock/pam.rs`, FFI to
+  libpam; needs `pam-devel` to build), started through `/proc/self/exe` so it
+  still works after an update replaced the binary: the password against
+  `doxia-lock-password`, an enrolled finger against
+  `doxia-lock-fingerprint` in parallel. Same marker
+  (`$XDG_RUNTIME_DIR/doxia-session-locked`), 5 s blank and wake on input as
+  the QML service; a lock left behind by a client that died is locked again
+  at startup (the stranded-lock check). Quickshell's `doxia.lock` goes to
+  `disabledPlugins` like the other two.
+
+- `shell` (the plugin surface): `summon`, `toggle`, `hide` and `call` for
+  the plugins doxia-shell has taken over, `doxia.menu`, `doxia.iniciar`,
+  `doxia.clipboard`, `doxia.emojis`, `doxia.image-picker` and
+  `doxia.reminders` (Quickshell's `doxia.*` names for them still work); for any
+  other plugin, or a call without one (`ping`,
+  `listPlugins`), it answers "Target not found." and the call goes on to
+  Quickshell. Both plugins stay enabled there: the menu's bar button is a
+  Quickshell widget, and either menu still opens from Quickshell when
+  doxia-shell is not running.
+
+- The DoxIA menu (`menu/`), replacing `shell/plugins/menu`: the same JSONC
+  files (`default/doxia/doxia-menu.jsonc`, then
+  `~/.config/doxia/extensions/doxia-menu.jsonc` over it, both watched),
+  routes and aliases, search with the divider between this menu's matches
+  and deeper ones, the providers (apps, fonts, power profiles), the
+  `when:`/`checked:` guards batched into one bash run (`menu/model.rs` is
+  `MenuModel.js` with its tests), the select and input prompts of
+  `doxia-menu-select`/`-input` (selection and done files), and Delete to
+  uninstall an app. The card is drawn with cairo (`card.rs`): GTK's
+  `border-image` ignores `border-radius`. Not carried over: the "Launching…"
+  OSD for slow apps.
+
+- The Start menu (`iniciar/`), replacing `fedora/doxia/plugins/doxia.iniciar`:
+  the Windows 98 cascade in the menu's colors (the relief is stacked over
+  black, as in the QML, so it reads nearly opaque). Programs come from the
+  same app list as the menu's Apps, which honors `OnlyShowIn`/`NotShowIn`;
+  the QML one read the desktop entries without them, so GNOME-only entries
+  such as Yelp no longer show. Each submenu opens level with the row that
+  opened it, as the QML meant to.
+
+- The pickers, sharing the menu's card and keys (`popup.rs`):
+  - `emojis.rs`, replacing `shell/plugins/emojis`: the grid of the plugin's
+    `emojis.json`, filtered by keyword, inserted with
+    `doxia-menu-emoji-insert`.
+  - `clipboard/`, replacing `shell/plugins/clipboard`: the history in
+    `~/.local/state/doxia/clipboard-history.json` (`clipboard/model.rs` is
+    `ClipboardHistory.js`) and the picker that pastes, copies or opens from
+    it. doxia-shell also runs the plugin's watchers (`wl-paste --watch
+    capture.sh`), so it turns `doxia.clipboard` off in shell.json and ends
+    Quickshell's watchers before starting its own; two sets would record
+    every copy twice. `apply-bar` keeps it off, or back on without
+    doxia-shell, like the services above.
+  - `images.rs`, replacing `shell/plugins/image-picker`: the carousel of
+    `doxia-menu-images` (theme, background and boot screen switchers),
+    drawn with cairo, as the `image-selector` IPC target (`open`, `preload`,
+    `cancel`) as well as the plugin.
+  - `reminders.rs`, replacing `shell/plugins/reminders`: the minutes, then
+    the message, handed to `doxia-reminder`.
+
+- `background`: the desktop background (`background.rs`), replacing
+  `shell/plugins/background` (`refresh`, `set`, `setInstant`, `transition`,
+  `themeTransition`). One background-layer window per screen with the image
+  cropped to fill it; a new one comes in through the QML's slanted band.
+  `themeTransition` (`doxia-theme-set`) also carries the theme's
+  `colors.toml` and `shell.toml`: as the band starts doxia-shell reloads its
+  CSS and passes them on to Quickshell's `shell applyTheme` (which does not
+  watch the files), so the bar changes with the picture. Double-click picks a
+  background, a right double-click a theme. Parallax: the picture is drawn a
+  quarter wider than the screen and slides 15% of the way mango's scroller
+  strip scrolls (`mmsg watch all-clients`), up to its edge. mango reports the
+  windows only once they have moved, so during a three-finger swipe the
+  picture follows the fingers off the touchpad's evdev node (`touchpad.rs`),
+  readable through the udev rule `fedora/doxia/install-touchpad-access`
+  installs; without it the picture moves when the swipe is over.
+
+- The battery warning (`battery.rs`), replacing `shell/services/battery`:
+  UPower's display device every 30 s and on every switch to or from battery;
+  `doxia-battery-low` once per discharge at 10% or less, and the profile
+  saved for battery or AC (`doxia-powerprofiles-set`) on each switch.
+
+- `doxia.background` and `doxia.battery` go to `disabledPlugins` like the
+  services above. Still Quickshell's, because its bar's indicators read them
+  directly: `doxia.idle` (stay awake), `doxia.nightlight` and
+  `doxia.media`; they move with the bar.
+
+- `doxia-shell --features` lists what the build takes over, for
+  `apply-bar` (builds before 0.7.0 reject the option).
+
+- Commands the menus start run in a scope of their own
+  (`systemd-run --user --scope`, `run.rs`): doxia-shell is a service, and
+  restarting it (the update does) would otherwise end everything it started.
+
+## doxia-freeze
+
+Freezes the screen while slurp picks (`doxia-capture-region`, `-qr`, `-text`,
+`-color`): a grim screenshot of each monitor on an overlay layer surface
+(namespace `doxia-freeze`, no animation, blur or shadow in mango's layer
+rules), so slurp, mapped after it, sits above it, and grim captures the frozen
+content. `doxia-freeze --background` returns once the freeze is painted and
+prints its PID; the caller kills it after grim. Without it the scripts pick
+over the live screen.
+
+## doxia-greeter
+
+The login screen. greetd (`/etc/greetd/config.toml`, from
+`default/greetd/config.toml`) runs `default/greetd/doxia-greeter-session` as
+the `greetd` user on VT 1: the same VM environment fixes as the desktop
+session, the system keyboard layout from `localectl`, then a bare mango
+(`default/greetd/mango.conf`, no bindings) that starts `doxia-greeter` and
+quits when it exits. The greeter talks greetd's IPC over `$GREETD_SOCK`
+(`greeter/src/greetd.rs`): the password answers the one secret prompt, then
+`start_session` with the chosen session's `Exec` through the account's login
+shell (greetd joins the words for `sh -c`, so they go quoted). Accounts come
+from `/etc/passwd` within `/etc/login.defs`' uid range, pictures from
+AccountsService's icons, sessions from `wayland-sessions`, the last account
+and session from `/var/lib/greetd/doxia-greeter.state`, power actions from
+logind. If it can't run (missing, or three failures in two minutes) the
+session script falls back to agreety on the console.
+
+`fedora/doxia/install-greeter` installs it all and moves a machine off SDDM
+(next boot; SDDM is removed without its scriptlets, which would stop the
+running session).
+
+To look at it without logging out (the PNG comes from GTK, so it works even
+where grim doesn't):
+
+```bash
+DOXIA_GREETER_DATA=$DOXIA_PATH/default/login doxia-greeter --windowed
+DOXIA_GREETER_DATA=$DOXIA_PATH/default/login doxia-greeter --windowed --snapshot /tmp/g.png Tab,Down
+```
+
+## CSS gotchas
+
+- GTK 4.22's `GtkPasswordEntry` has the CSS name `entry` (class `password`),
+  not `passwordentry`.
+- A gradient border over a translucent card: use `border-image`; a
+  `border-box` background layer shows through the card's fill.
+
+## Font
+
+`base.css` names "DoxIA Shell" (the shell font with Lucide icons) on every
+widget, with no `monospace` in the list: doxia-font-set's fontconfig rule
+puts the terminal font first in any list that names `monospace`, and its
+icons are the plain Nerd Font ones.
+
+## VMware note
+
+With GTK's GL renderer on vmwgfx, an animated revealer overlaid on the window
+stalled the compositor's frames (screencopy hung until the app closed): the
+toasts appear without a transition. Check new animations there with a
+screenshot, or with `GSK_RENDERER=cairo` to compare.
+
+## Shipping
+
+```bash
+sudo dnf install cargo gtk4-devel gtk4-layer-shell-devel pam-devel
+fedora/doxia/rs/package          # tests, builds, packs; prints the archive and its sha256
+gh release create doxia-rs-<version> fedora/doxia/rs/dist/doxia-rs-<version>-x86_64.tar.gz \
+  --target fedora --latest=false
+```
+
+Then set `version` and `sha256` in `fedora/doxia/install-rs`, which
+`fedora/install-system.sh` and `fedora/update.sh` run. Bump `version` in the
+workspace `Cargo.toml` for every release: the archive name carries it.

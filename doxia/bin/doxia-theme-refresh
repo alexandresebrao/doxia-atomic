@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# doxia:summary=Refresh the current theme from its templates.
+
+THEME_NAME_PATH="$HOME/.local/state/doxia/current/theme.name"
+
+if [[ -f $THEME_NAME_PATH ]]; then
+  DOXIA_THEME_SKIP_BACKGROUND=1 doxia-theme-set "$(cat $THEME_NAME_PATH)"
+fi

@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# Google Chrome as DoxIA's browser: Google's dnf repo and package (as root), then what
+# doxia-install-browser chrome does for the user (Wayland flags, Copy URL and yt-dlp
+# extensions) and Chrome as the default browser unless one is already picked.
+#
+# No managed policy directory for Chrome: a color set by policy always gets a light
+# frame. The theme reaches Chrome through its profile instead, written by
+# fedora/doxia/chrome/google-chrome-stable before each start.
+#
+#   sudo fedora/doxia/install-chrome --system   # as root: repo and package (install-system.sh)
+#   fedora/doxia/install-chrome                 # as the user: package via sudo when missing, then the rest
+
+set -euo pipefail
+
+doxia_path=${DOXIA_PATH:-$(cd "$(dirname "$0")/../.." && pwd)}
+
+if [[ ${1:-} == "--system" ]]; then
+  # Google's package rewrites this file itself on updates; this only gets the first install going.
+  if [[ ! -f /etc/yum.repos.d/google-chrome.repo ]]; then
+    cat > /etc/yum.repos.d/google-chrome.repo <<'REPO'
+[google-chrome]
+name=google-chrome
+baseurl=https://dl.google.com/linux/chrome/rpm/stable/x86_64
+skip_if_unavailable=True
+gpgcheck=1
+gpgkey=https://dl.google.com/linux/linux_signing_key.pub
+enabled=1
+REPO
+  fi
+  # Fedora Workstation ships the same repo disabled.
+  dnf config-manager setopt google-chrome.enabled=1 >/dev/null
+  rpm -q google-chrome-stable &>/dev/null || dnf install -y google-chrome-stable
+  exit 0
+fi
+
+if (( EUID == 0 )); then
+  echo "Run as your user, not root (or with --system for the system part only)." >&2
+  exit 1
+fi
+
+if ! rpm -q google-chrome-stable &>/dev/null; then
+  sudo bash "$doxia_path/fedora/doxia/install-chrome" --system
+fi
+
+mkdir -p "$HOME/.config"
+cp -f "$doxia_path/config/chromium-flags.conf" "$HOME/.config/chrome-flags.conf"
+# Chrome on GTK 4, so its frame is dark under a dark theme.
+bash "$doxia_path/fedora/doxia/chrome/install-desktop" "$doxia_path"
+doxia-install-chromium-copy-url
+doxia-install-chromium-ytdlp
+
+# Only when no browser was picked by hand (Setup > Defaults > Browser writes this file).
+if ! grep -qs '^x-scheme-handler/https=' "$HOME/.config/mimeapps.list"; then
+  env -u BROWSER xdg-settings set default-web-browser google-chrome.desktop
+fi

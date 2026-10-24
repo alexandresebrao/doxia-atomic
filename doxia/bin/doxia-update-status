@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# doxia:summary=Refresh the shell update status
+# doxia:hidden=true
+
+set -e
+
+if doxia-update-available >/dev/null; then
+  doxia-shell-call -q doxia.system-update refresh
+else
+  doxia-shell-call -q doxia.system-update clear
+fi

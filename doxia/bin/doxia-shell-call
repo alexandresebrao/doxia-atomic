@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# doxia:summary=Send an IPC call to the running DoxIA shell
+# doxia:args=[-q] <target> <method> [args...]
+# doxia:examples=doxia shell shell ping | doxia-shell-call shell toggle doxia.menu '{"menu":"root"}'
+
+QUIET=0
+if [[ ${1:-} == "-q" ]]; then
+  QUIET=1
+  shift
+fi
+
+fail() {
+  (( QUIET )) && exit 0
+  echo "$1" >&2
+  exit 1
+}
+
+if (( $# == 0 )) || [[ $1 == "-h" || $1 == "--help" ]]; then
+  cat <<USAGE
+Usage: doxia-shell-call [-q] <target> <method> [args...]
+
+Forwards an IPC call to the running DoxIA shell (doxia-shell). The shell is expected
+to already be running; this command does not start it.
+
+Options:
+  -q  Quiet best-effort mode. Suppress output and return success even when
+      the shell, target, method, or arguments are unavailable.
+
+Examples:
+  doxia-shell-call shell ping
+  doxia-shell-call -q doxia.indicators refresh
+  doxia-shell-call shell listPlugins
+  doxia-shell-call shell toggle doxia.menu '{"menu":"root"}'
+USAGE
+  exit 0
+fi
+
+(( $# >= 2 )) || fail "Usage: doxia-shell-call <target> <method> [args...]"
+if [[ $1 == "shell" && ( $2 == "summon" || $2 == "toggle" ) ]] && (( $# == 3 )); then
+  set -- "$1" "$2" "$3" "{}"
+fi
+
+# doxia-shell (fedora/doxia/rs/shell) answers on the session bus.
+output=$(busctl --user --timeout=2 --json=short call org.doxia.Shell /org/doxia/Shell/Ipc \
+  org.doxia.Shell Call ssas "$1" "$2" $(( $# - 2 )) "${@:3}" 2>/dev/null | jq -r '.data[0] // empty' 2>/dev/null)
+[[ -n $output ]] || fail "doxia-shell is not running"
+[[ $output == "Target not found." || $output == "Function not found." ]] && fail "$output"
+
+(( QUIET )) || echo "$output"
+exit 0

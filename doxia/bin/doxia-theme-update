@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# doxia:summary=Update user-installed git themes
+
+mapfile -t themes < <(doxia-theme-extras)
+
+for theme in "${themes[@]}"; do
+  echo "Updating: $(basename "$theme")"
+  git -C "$theme" pull
+done

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# doxia:summary=Toggle notification do-not-disturb mode
+
+state=$(doxia-shell-call notifications toggleDnd 2>/dev/null || echo "")
+doxia-shell-call -q doxia.indicators refresh

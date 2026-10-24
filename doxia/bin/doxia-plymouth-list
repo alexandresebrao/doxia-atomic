@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# doxia:summary=List themes that can style the Plymouth boot screen
+# doxia:examples=doxia plymouth list
+
+{
+  find ~/.config/doxia/themes/ -mindepth 1 -maxdepth 1 \( -type d -o -type l \) -printf '%f\n' 2>/dev/null
+  find "$DOXIA_PATH/themes/" -mindepth 1 -maxdepth 1 -type d -printf '%f\n'
+} | sort -u | while read -r name; do
+  if [[ -f $(doxia-theme-dir "$name")/preview-unlock.png ]]; then
+    echo "$name"
+  fi
+done

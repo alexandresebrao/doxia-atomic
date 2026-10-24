@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# doxia:summary=Install and configure Voxtype dictation
+# doxia:requires-sudo=true
+
+set -e
+
+# Install voxtype and configure it for use.
+
+if gum confirm "Instalar o Voxtype + modelo de IA (~500MB) para ativar o ditado?"; then
+  doxia-pkg-add wtype
+
+  # Fedora has no voxtype package, so install the RPM from the latest upstream release.
+  if doxia-pkg-missing voxtype; then
+    release_url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/peteonrails/voxtype/releases/latest)
+    version=${release_url##*/v}
+    sudo dnf install -y "https://github.com/peteonrails/voxtype/releases/download/v$version/voxtype-$version-1.x86_64.rpm"
+  fi
+
+  # Setup voxtype
+  mkdir -p ~/.config/voxtype
+  cp "$DOXIA_PATH/default/voxtype/config.toml" ~/.config/voxtype/
+
+  voxtype setup --download --no-post-install
+  if doxia-hw-vulkan; then
+    voxtype setup gpu --enable || true
+  fi
+  voxtype setup systemd
+
+  doxia-restart-mango
+  doxia-restart-shell
+  doxia-notification-send -g  "Ditado do Voxtype pronto" "Segure F9 para ditar (ou alterne com Super + Ctrl + X)." -t 10000
+fi

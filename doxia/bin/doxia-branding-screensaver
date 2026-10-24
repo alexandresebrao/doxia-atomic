@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# doxia:summary=Edit, set, or reset screensaver branding
+# doxia:group=branding
+# doxia:name=screensaver
+# doxia:args=<image|text|reset>
+# doxia:examples=doxia branding screensaver image | doxia branding screensaver text | doxia branding screensaver reset
+
+set -euo pipefail
+
+case "${1:-}" in
+image)
+  image=$(doxia-file-select --title "Pick PNG or SVG for screensaver" --extensions "png svg")
+  if doxia-transcode-ascii "$image" ~/.config/doxia/branding/screensaver.txt; then
+    doxia-launch-screensaver force >/dev/null 2>&1
+  fi
+  ;;
+text)
+  doxia-launch-editor ~/.config/doxia/branding/screensaver.txt >/dev/null 2>&1 && doxia-launch-screensaver force >/dev/null 2>&1
+  ;;
+reset)
+  cp "$DOXIA_PATH/logo.txt" ~/.config/doxia/branding/screensaver.txt && doxia-launch-screensaver force >/dev/null 2>&1
+  ;;
+*)
+  echo "Usage: doxia-branding-screensaver <image|text|reset>" >&2
+  exit 1
+  ;;
+esac

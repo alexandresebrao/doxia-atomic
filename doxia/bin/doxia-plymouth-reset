@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# doxia:summary=Restore the default DoxIA Plymouth boot theme
+# doxia:requires-sudo=true
+
+set -euo pipefail
+
+exec "$DOXIA_PATH/bin/doxia-refresh-plymouth"

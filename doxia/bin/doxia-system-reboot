@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# doxia:summary=Reboot after closing application windows
+# doxia:examples=doxia reboot | doxia system reboot
+# doxia:aliases=doxia reboot
+
+# Schedule the reboot in the user manager so closing the terminal's systemd
+# scope cannot terminate it before it runs.
+systemd-run --user --collect --quiet --on-active="2s" --timer-property=AccuracySec=100ms systemctl reboot --no-wall || exit 1
+
+doxia-osd -i reboot -m "Reiniciando" -d 5000
+
+doxia-state clear re*-required
+
+# Now close all windows
+doxia-mango-window-close-all
+sleep 1 # Allow apps like Chrome to shutdown correctly

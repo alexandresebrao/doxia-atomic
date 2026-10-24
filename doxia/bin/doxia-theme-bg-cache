@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# doxia:summary=Cache background switcher thumbnails for the current theme
+
+theme_name=$(cat "$HOME/.local/state/doxia/current/theme.name" 2>/dev/null)
+
+doxia-menu-images \
+  --cache-only \
+  "$HOME/.local/state/doxia/current/theme/backgrounds" \
+  "$HOME/.config/doxia/backgrounds/$theme_name"

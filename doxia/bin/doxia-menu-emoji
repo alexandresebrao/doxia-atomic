@@ -1,0 +1,6 @@
+#!/bin/bash
+# doxia:summary=Launch emojis
+# doxia:group=menu
+# doxia:examples=doxia menu emoji
+
+doxia-shell-call shell toggle doxia.emojis

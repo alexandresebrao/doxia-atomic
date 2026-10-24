@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# doxia:summary=Enable, disable, or toggle the touch functionality of the screen
+# doxia:args=[on|off|toggle]
+
+exec doxia-toggle-input-device touchscreen "${1:-toggle}"

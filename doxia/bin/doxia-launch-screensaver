@@ -1,0 +1,75 @@
+#!/bin/bash
+
+# doxia:summary=Launch the DoxIA screensaver in the default terminal on the system with the correct font configuration.
+
+if doxia-cmd-missing ttfx; then
+  exit 1
+fi
+
+# Exit early if screensaver is already running
+pgrep -f '[o]rg.doxia.screensaver' && exit 0
+
+# Allow screensaver to be turned off but also force started
+if doxia-toggle-enabled screensaver-off && [[ $1 != "force" ]]; then
+  exit 1
+fi
+
+focused=$(doxia-mango-monitor-focused)
+
+# Use the default terminal when it can draw the screensaver, otherwise the first
+# supported one that is installed (the default may be Ptyxis or similar).
+terminal=$(xdg-terminal-exec --print-id)
+case $terminal in
+*Alacritty* | *ghostty* | *foot* | *kitty*) ;;
+*)
+  terminal=""
+  for candidate in kitty alacritty ghostty foot; do
+    if doxia-cmd-present "$candidate"; then
+      terminal=$candidate
+      break
+    fi
+  done
+  ;;
+esac
+
+if [[ -z $terminal ]]; then
+  doxia-notification-send -g ✋ "O protetor de tela precisa do Alacritty, Foot, Ghostty ou Kitty instalado"
+  exit 1
+fi
+
+# A new window maps on whatever monitor is focused at that moment. Block until
+# this monitor's screensaver actually opens before moving focus on -- otherwise
+# slow-starting terminals all pile onto the last monitor. The deadline is a
+# safety net in case the window never appears.
+wait_for_screensaver_window() {
+  local deadline=$((SECONDS + 5))
+  while ((SECONDS < deadline)); do
+    mmsg get all-clients 2>/dev/null |
+      jq -e --arg m "$1" 'any(.clients[]; .appid == "org.doxia.screensaver" and .monitor == $m)' >/dev/null &&
+      return 0
+    sleep 0.1
+  done
+}
+
+for m in $(mmsg get all-monitors | jq -r '.monitors[].name'); do
+  mmsg dispatch "focusmon,$m" >/dev/null
+
+  case $terminal in
+  *Alacritty* | alacritty)
+    setsid -f alacritty --class=org.doxia.screensaver --config-file "$DOXIA_PATH/default/alacritty/screensaver.toml" -e doxia-screensaver
+    ;;
+  *ghostty*)
+    setsid -f ghostty --class=org.doxia.screensaver --config-file="$DOXIA_PATH/default/ghostty/screensaver" --font-size=18 -e doxia-screensaver
+    ;;
+  *foot*)
+    setsid -f foot --app-id=org.doxia.screensaver --config="$DOXIA_PATH/default/foot/screensaver.ini" -e doxia-screensaver
+    ;;
+  *kitty*)
+    setsid -f kitty --class=org.doxia.screensaver --override font_size=18 --override window_padding_width=0 -e doxia-screensaver
+    ;;
+  esac >/dev/null 2>&1
+
+  wait_for_screensaver_window "$m"
+done
+
+mmsg dispatch "focusmon,$focused" >/dev/null

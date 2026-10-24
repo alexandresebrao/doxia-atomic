@@ -1,0 +1,84 @@
+#!/bin/bash
+
+# Installs nvm (Node.js versions) in ~/.config/nvm and SDKMAN! (Java and JVM tools)
+# in ~/.sdkman for the current user, with the Node.js LTS (pnpm in every Node.js
+# version) and SDKMAN!'s default JDK as the defaults: node and java come from them,
+# not from Fedora's packages
+# (install-system.sh drops LibreOffice and, with it, Fedora's JDK). Loads both in
+# every bash through ~/.bashrc.d/dev-tools.sh (fedora/doxia/dev-tools.sh). Skips
+# what is already installed; neither installer touches ~/.bashrc. Also puts the
+# "Versões do Node e do Java" window (fedora/doxia/dev-versions) in the launcher.
+# Run as the user by install-user.sh and fedora/update.sh.
+
+set -euo pipefail
+
+if (( EUID == 0 )); then
+  echo "Run as your user, not root." >&2
+  exit 1
+fi
+
+doxia_path=${DOXIA_PATH:-$HOME/.local/share/doxia}
+nvm_dir=$HOME/.config/nvm
+
+# nvm's documented git install, at its latest release. awk reads the whole list:
+# head -1 would close the pipe early, git dies of SIGPIPE and pipefail aborts here.
+if [[ ! -s $nvm_dir/nvm.sh ]]; then
+  tag=$(git ls-remote --tags --refs --sort=-v:refname https://github.com/nvm-sh/nvm.git 'v*' |
+    awk 'NR == 1 { sub(/.*refs\/tags\//, ""); print }')
+  echo "  nvm $tag"
+  rm -rf "$nvm_dir"
+  git -c advice.detachedHead=false clone -q --depth 1 --branch "$tag" https://github.com/nvm-sh/nvm.git "$nvm_dir"
+fi
+
+if [[ ! -s $HOME/.sdkman/bin/sdkman-init.sh ]]; then
+  echo "  SDKMAN!"
+  curl -fsSL "https://get.sdkman.io?rcupdate=false" | bash >/dev/null
+fi
+
+# pnpm in every Node.js version it runs on: nvm installs what default-packages lists
+# with each nvm install (the window's included), and the versions already there get
+# it now. Versions older than pnpm's engines.node (>=18 for pnpm 12) are left alone;
+# the minimum is asked once, and an offline npm view just means trying each version.
+grep -qx pnpm "$nvm_dir/default-packages" 2>/dev/null || echo pnpm >> "$nvm_dir/default-packages"
+pnpm_min_node=""
+for node in "$nvm_dir"/versions/node/*/; do
+  [[ -x $node/bin/node && ! -e $node/bin/pnpm ]] || continue
+  version=$(basename "$node")
+  major=${version#v}
+  major=${major%%.*}
+  [[ -n $pnpm_min_node ]] ||
+    pnpm_min_node=$(PATH="$node/bin:$PATH" npm view pnpm engines.node 2>/dev/null |
+      sed -nE 's/.*>= *([0-9]+).*/\1/p') || true
+  [[ -n $pnpm_min_node ]] && (( major < pnpm_min_node )) && continue
+  echo "  pnpm for Node.js $version"
+  PATH="$node/bin:$PATH" npm install -g --silent pnpm ||
+    echo "  pnpm doesn't install on Node.js $version, skipped"
+done
+
+# nvm and SDKMAN! are shell functions that don't run under set -u.
+if [[ ! -e $nvm_dir/alias/default ]]; then
+  echo "  Node.js LTS (nvm default)"
+  bash -c '. "$1/nvm.sh" && nvm install --lts >/dev/null && nvm alias default "lts/*" >/dev/null' _ "$nvm_dir"
+fi
+
+if [[ ! -e $HOME/.sdkman/candidates/java/current ]]; then
+  echo "  Java (SDKMAN! default)"
+  bash -c '. "$HOME/.sdkman/bin/sdkman-init.sh" && sdkman_auto_answer=true && sdk install java >/dev/null'
+fi
+
+mkdir -p "$HOME/.bashrc.d"
+ln -sfn "$doxia_path/fedora/doxia/dev-tools.sh" "$HOME/.bashrc.d/dev-tools.sh"
+
+# The window that picks the defaults and installs versions (fedora/doxia/dev-versions),
+# in the launcher. Named after its app ID so the dock and switcher match it.
+mkdir -p "$HOME/.local/share/applications"
+cat > "$HOME/.local/share/applications/org.doxia.DevVersions.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Versões do Node e do Java
+Comment=Escolha a versão padrão e instale versões do Node.js (nvm) e do Java (SDKMAN!)
+Keywords=node;nodejs;npm;nvm;java;jdk;sdkman;oracle;
+Exec=python3 $doxia_path/fedora/doxia/dev-versions
+Icon=java
+Categories=Development;
+DESKTOP

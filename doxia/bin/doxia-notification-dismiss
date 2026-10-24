@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# doxia:summary=Dismiss a notification by summary substring. Used by the first-run notifications to dismiss them after clicking for action.
+# doxia:args=<summary>
+
+if (($# == 0)); then
+  echo "Usage: doxia-notification-dismiss <summary>"
+  exit 1
+fi
+
+doxia-shell-call -q notifications dismiss "$1"

@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# doxia:summary=Overwrite all the user mango configs in ~/.config/mango with the DoxIA defaults.
+
+for file in "$DOXIA_PATH"/config/mango/*.conf; do
+  doxia-refresh-config "mango/${file##*/}"
+done
+
+doxia-mango-bindings
+doxia-mango-monitor-apply
+mmsg dispatch reload_config >/dev/null 2>&1 || true

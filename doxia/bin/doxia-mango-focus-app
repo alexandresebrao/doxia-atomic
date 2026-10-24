@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# doxia:summary=Focus a mango window by application identity
+# doxia:args=<app-name>
+# doxia:examples=doxia mango focus app Slack
+
+usage() {
+  echo "Usage: doxia-mango-focus-app <app-name>" >&2
+  exit 1
+}
+
+app=${1:-}
+[[ -n $app ]] || usage
+
+# Agent terminals notify as kitty/foot/etc. while their shared app id is
+# org.doxia.agent, leaving the terminal name only in the title. So match by
+# app id first, then fall back to the title of agent windows.
+id=$(
+  mmsg get all-clients 2>/dev/null |
+    jq -r --arg pattern "$app" \
+      'def matches($value): ($value // "") | test($pattern; "i");
+       first(
+         (.clients[] | select(matches(.appid))),
+         (.clients[] | select(.appid == "org.doxia.agent" and matches(.title)))
+       ).id // empty'
+)
+
+[[ -n $id ]] || exit 1
+
+mmsg dispatch focusid "client,$id" >/dev/null

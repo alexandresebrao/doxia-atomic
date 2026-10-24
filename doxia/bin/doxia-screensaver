@@ -1,0 +1,88 @@
+#!/bin/bash
+
+# doxia:summary=Run the DoxIA screensaver using random effects from TTE.
+
+screensaver_in_focus() {
+  mmsg get focusing-client 2>/dev/null | jq -e '.appid == "org.doxia.screensaver"' >/dev/null 2>&1
+}
+
+exit_screensaver() {
+  mmsg dispatch "setoption,cursor_hide_timeout,$(doxia-mango-option cursor_hide_timeout || echo 0)" &>/dev/null || true
+  pkill -x ttfx 2>/dev/null
+  pkill -f '[o]rg.doxia.screensaver' 2>/dev/null
+  exit 0
+}
+
+# Exit the screensaver on signals and input from keyboard and mouse
+trap exit_screensaver SIGINT SIGTERM SIGHUP SIGQUIT
+
+printf '\033]11;rgb:00/00/00\007'  # Set background color to black
+
+# mango has no invisible cursor; hide it a second after it stops moving.
+mmsg dispatch setoption,cursor_hide_timeout,1 &>/dev/null
+
+tty=$(tty 2>/dev/null)
+
+# Terminals allocate the pty at the default 80x24 and only resize it once the
+# compositor has told the window how big it is. ttfx measures the terminal once,
+# at startup, so starting it before the resize lands sizes an 80x24 canvas and
+# paints it into the corner of a fullscreen window.
+wait_for_terminal_resize() {
+  local deadline=$((SECONDS + 2))
+  while ((SECONDS < deadline)) && [[ $(stty size 2>/dev/null) == "24 80" ]]; do
+    sleep 0.02
+  done
+}
+
+wait_for_terminal_resize
+
+# DoxIA: the dachshund running through the night (fedora/doxia/screensaver-salsicha)
+# instead of the TTE effects below, which stay so upstream changes keep merging.
+# Not exec'd: the cursor hidden above has to come back when it quits.
+python3 "$DOXIA_PATH/lib/screensaver-salsicha"
+exit_screensaver
+
+# DoxIA palette: every effect settles on light gray (DOX) and the theme red
+# (IA) instead of its own default colors. Effects that animate in strong green
+# (matrix, binarypath, decrypt, vhstape, errorcorrect, swarm, colorshift) are left out;
+# synthgrid has no final gradient to recolor.
+effects=($(ttfx --help | awk '/^Commands:/{f=1;next} /^Options:/{f=0} f && $1!="help" {print $1}' | grep -vxE 'matrix|binarypath|decrypt|vhstape|errorcorrect|swarm|colorshift|synthgrid'))
+
+# The final gradient spans the whole canvas, not the text, so build one stop per
+# terminal column: light gray across DOX, red across IA (which starts at column
+# 54 of the 70-column wordmark).
+wordmark=~/.config/doxia/branding/screensaver.txt
+cols=$(stty size 2>/dev/null | cut -d' ' -f2)
+stops=($(awk -v cols="${cols:-120}" -v os_col=54 '
+  { if (length($0) > w) w = length($0) }
+  function mix(a, b, t,   i, out) {
+    out = ""
+    for (i = 0; i < 3; i++)
+      out = out sprintf("%02x", a[i] + (b[i] - a[i]) * t)
+    return out
+  }
+  END {
+    s1[0]=0xf0; s1[1]=0xf0; s1[2]=0xf0; s2[0]=0xf0; s2[1]=0xf0; s2[2]=0xf0
+    b1[0]=0xee; b1[1]=0x00; b1[2]=0x00; b2[0]=0xee; b2[1]=0x00; b2[2]=0x00
+    off = int((cols - w) / 2)
+    for (c = 0; c < cols; c++) {
+      x = c - off
+      if (x < os_col) { t = x / os_col; if (t < 0) t = 0; print mix(s1, s2, t) }
+      else { t = (x - os_col) / (w - os_col); if (t > 1) t = 1; print mix(b1, b2, t) }
+    }
+  }' "$wordmark"))
+((${#stops[@]})) || stops=(f0f0f0 ee0000)
+
+while true; do
+  effect=${effects[RANDOM % ${#effects[@]}]}
+  ttfx -i "$wordmark" \
+    --frame-rate 120 --canvas-width 0 --canvas-height 0 --reuse-canvas --anchor-canvas c --anchor-text c \
+    --no-eol --no-restore-cursor \
+    "$effect" --final-gradient-stops "${stops[@]}" --final-gradient-steps 1 --final-gradient-direction horizontal &
+
+  while pgrep -t "${tty#/dev/}" -x ttfx >/dev/null; do
+    if read -n1 -t 1 || ! screensaver_in_focus; then
+      exit_screensaver
+    fi
+  done
+done

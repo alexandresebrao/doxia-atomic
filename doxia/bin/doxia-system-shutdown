@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# doxia:summary=Shut down after closing application windows
+# doxia:examples=doxia shutdown | doxia system shutdown
+# doxia:aliases=doxia shutdown
+
+# Schedule the shutdown in the user manager so closing the terminal's systemd
+# scope cannot terminate it before it runs.
+systemd-run --user --collect --quiet --on-active="2s" --timer-property=AccuracySec=100ms systemctl poweroff --no-wall || exit 1
+
+doxia-osd -i shutdown -m "Desligando" -d 5000
+
+doxia-state clear re*-required
+
+# Now close all windows
+doxia-mango-window-close-all
+sleep 1 # Allow apps like Chrome to shutdown correctly

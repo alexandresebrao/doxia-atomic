@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# doxia:summary=Reload btop configuration (used by the DoxIA theme switching).
+
+pkill -SIGUSR2 btop

@@ -1,0 +1,361 @@
+/* doxia-shell surfaces, on top of doxia-theme's base.css. The OSD follows
+   shell/plugins/osd/Osd.qml: popup colors, a 2px border, 16px padding. */
+
+window.osd-window { background: transparent; }
+
+.osd-card {
+  border: 2px solid transparent;
+  border-radius: $R_CTRL;
+  background: $POPUP_FILL;
+  border-image: $POPUP_BORDER 1;
+  padding: 16px;
+  color: $POPUP_TEXT;
+}
+.osd-icon { font-size: $FS_DISPLAY_LARGE; color: $POPUP_TEXT; }
+.osd-text { font-size: $FS_TITLE; font-weight: bold; color: $POPUP_TEXT; }
+
+progressbar.osd-bar trough {
+  padding: 0;
+  min-width: 142px;
+  min-height: 6px;
+  background: $POPUP_TRACK;
+  border: none;
+  border-radius: 0;
+}
+progressbar.osd-bar progress {
+  min-width: 0;
+  margin: 0;
+  min-height: 6px;
+  background: $ACCENT;
+  border: none;
+  border-radius: 0;
+}
+
+/* Notifications, like components/NotificationCard.qml: [notifications] colors
+   from shell.toml, a 2px border, summary and body in Liberation Sans. */
+window.notif-window { background: transparent; }
+
+.notif-card {
+  border: 2px solid transparent;
+  border-radius: $R_CTRL;
+  background: $NOTIF_BG;
+  border-image: $NOTIF_BORDER 1;
+  color: $NOTIF_TEXT;
+}
+window.doxia .notif-summary {
+  font-family: "Liberation Sans";
+  font-size: $FS_TITLE;
+  font-weight: bold;
+  color: $NOTIF_TEXT;
+}
+window.doxia .notif-body {
+  font-family: "Liberation Sans";
+  font-size: $FS_TITLE;
+  color: $NOTIF_BODY;
+}
+.notif-body link { color: $ACCENT; }
+.notif-glyph { font-size: $FS_DISPLAY_LARGE; color: $NOTIF_TEXT; }
+.notif-glyph-small { font-size: $FS_TITLE; color: $NOTIF_TEXT; }
+
+/* Polkit, like shell/plugins/polkit/PolkitAgent.qml: [polkit] colors, a
+   scrim over the screen, the card with a 2px border, the label above it. */
+window.polkit-window { background: $PK_SCRIM; }
+
+.polkit-card {
+  border: 2px solid transparent;
+  border-radius: $R_CTRL;
+  background: $PK_BG;
+  border-image: $PK_BORDER 1;
+  padding: 18px;
+  min-height: 42px;
+}
+.polkit-card.error { background: $PK_BG;
+  border-image: $PK_BORDER_ERROR 1; }
+.polkit-card.fingerprint { padding: 18px 22px; }
+.polkit-glyph { font-size: $FS_ICON_LARGE; color: $PK_ACCENT; }
+.polkit-card.fingerprint .polkit-glyph { font-size: 29px; }
+.polkit-glyph.error { color: $PK_TEXT_ERROR; }
+
+entry.polkit-entry {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  min-height: 42px;
+  padding: 0;
+  color: $PK_TEXT;
+  font-size: $FS_ICON_LARGE;
+  caret-color: $PK_TEXT;
+}
+entry.polkit-entry text placeholder { color: alpha($PK_TEXT, 0.36); }
+entry.polkit-entry.error text placeholder { color: $PK_TEXT_ERROR; }
+entry.polkit-entry image { color: $PK_TEXT; }
+
+.polkit-label {
+  background: $PK_BG;
+  border-radius: $R_CTRL;
+  padding: 6px 12px;
+  color: $PK_TEXT;
+  font-size: $FS_SMALL;
+}
+
+/* The DoxIA menu, like shell/plugins/menu/Menu.qml: [menu] colors, the card
+   drawn in card.rs, rows that fill with the selected color. */
+window.menu-window { background: $MENU_SCRIM; }
+.menu-header { font-size: $FS_HEADING; color: $MENU_TEXT; }
+.menu-header.placeholder { color: alpha($MENU_TEXT, 0.58); }
+.menu-row { border-radius: $R_CTRL; color: $MENU_TEXT; }
+.menu-row.selected { background: $MENU_SEL_BG; }
+.menu-row.selected label { color: $MENU_SEL_TEXT; }
+.menu-row.selected .menu-detail { color: alpha($MENU_TEXT, 0.52); }
+.menu-icon { font-size: $FS_ICON_LARGE; color: $MENU_TEXT; }
+.menu-label { font-size: $FS_HEADING; font-weight: 500; color: $MENU_TEXT; }
+.menu-detail { font-size: $FS_SMALL; color: alpha($MENU_TEXT, 0.52); }
+.menu-chevron { font-size: $FS_HEADING; color: alpha($MENU_TEXT, 0.36); }
+.menu-row.selected .menu-chevron { color: alpha($MENU_SEL_TEXT, 0.36); }
+.menu-divider { min-height: 1px; background: alpha($MENU_TEXT, 0.2); }
+.menu-empty-icon { font-size: $FS_DISPLAY_LARGE; color: alpha($MENU_SEL_TEXT, 0.8); }
+.menu-empty { font-size: $FS_TITLE; color: alpha($MENU_TEXT, 0.7); }
+.popup-confirm { background: alpha($BG, 0.7); border-radius: $R_CTRL; }
+.popup-confirm-text { font-size: $FS_TITLE; color: $MENU_TEXT; }
+.popup-confirm-button { padding: 8px 0; border-radius: $R_CTRL; color: $MENU_TEXT; }
+.popup-confirm-button.selected { background: $MENU_SEL_BG; color: $MENU_SEL_TEXT; }
+.popup-confirm-button.destructive.selected { background: alpha($URGENT, 0.35); }
+
+/* The Start menu, like fedora/doxia/plugins/doxia.iniciar/Iniciar.qml: the
+   menu's colors in Windows 98 relief: the theme border, a light top/left and
+   dark bottom/right edge, then a mid one, no rounding. */
+window.iniciar-window { background: transparent; }
+.iniciar-column {
+  background: $IN_FACE;
+  border: 1px solid transparent;
+  border-image: $IN_BORDER 1;
+}
+/* Iniciar.qml stacks its translucent relief over a black rectangle, so the
+   column reads nearly opaque: black under the relief, the menu's face over
+   the light, shadow and mid tones inside. */
+.iniciar-relief {
+  background: #000000;
+  border-style: solid;
+  border-width: 1px;
+  border-color: $IN_LIGHT #000000 #000000 $IN_LIGHT;
+}
+.iniciar-inner {
+  background: linear-gradient($IN_FACE, $IN_FACE), linear-gradient($IN_MID, $IN_MID),
+    linear-gradient($IN_SHADOW, $IN_SHADOW), linear-gradient($IN_LIGHT, $IN_LIGHT);
+  border-style: solid;
+  border-width: 1px;
+  border-color: $IN_MID $IN_SHADOW $IN_SHADOW $IN_MID;
+  padding: 3px;
+}
+.iniciar-banner { background: linear-gradient(to bottom, $IN_BANNER_TOP, $IN_BANNER_BOTTOM); }
+.iniciar-row { color: $MENU_TEXT; }
+.iniciar-row.selected { background: $MENU_SEL_BG; color: $MENU_SEL_TEXT; }
+.iniciar-row.selected label { color: $MENU_SEL_TEXT; }
+.iniciar-label { font-size: $FS_BODY; color: $MENU_TEXT; }
+.iniciar-row.root .iniciar-label { font-size: $FS_TITLE; }
+.iniciar-row.disabled .iniciar-label { color: alpha($MENU_TEXT, 0.55); font-style: italic; }
+.iniciar-row image { color: $MENU_TEXT; }
+.iniciar-row.selected image { color: $MENU_SEL_TEXT; }
+.iniciar-row image.gray { -gtk-icon-filter: grayscale(1); }
+.iniciar-row.disabled image { opacity: 0.5; }
+.iniciar-emblem { color: $MENU_TEXT; }
+.iniciar-row.selected .iniciar-emblem { color: $MENU_SEL_TEXT; }
+.iniciar-arrow { font-size: 8px; color: $MENU_TEXT; }
+.iniciar-sep-line { min-height: 1px; border-bottom: 1px solid $IN_MID; background: #000000; }
+.iniciar-field-label, .iniciar-field-text { font-size: $FS_BODY; color: $MENU_TEXT; }
+.iniciar-field { background: $IN_FIELD; border-style: solid; border-width: 1px 0 0 1px; border-color: $IN_LIGHT; }
+.iniciar-hint { font-size: $FS_SMALL; color: alpha($MENU_TEXT, 0.55); }
+
+/* The emoji and clipboard pickers, like Emojis.qml and Clipboard.qml: the
+   menu's card, header and selected color. */
+window.emojis-window, window.clipboard-window, window.reminders-window { background: $MENU_SCRIM; }
+window.images-window { background: transparent; }
+gridview.emoji-grid, gridview.emoji-grid > child { background: transparent; padding: 0; margin: 0; }
+gridview.emoji-grid > child { border-radius: $R_CTRL; }
+gridview.emoji-grid > child:selected { background: $MENU_SEL_BG; }
+window.doxia .emoji-cell { font-family: "Noto Color Emoji", "DoxIA Shell"; font-size: 24px; }
+.clipboard-row { border-radius: $R_CTRL; padding: 8px 12px; }
+.clipboard-row.selected { background: $MENU_SEL_BG; }
+.clipboard-row-text { font-size: $FS_TITLE; color: $MENU_TEXT; }
+.clipboard-row-text.dim { color: alpha($MENU_TEXT, 0.72); }
+.clipboard-row.selected .clipboard-row-text { color: $MENU_SEL_TEXT; }
+.clipboard-preview { border-left: 1px solid alpha($MENU_TEXT, 0.28); }
+.clipboard-preview-text { font-size: $FS_TITLE; color: $MENU_TEXT; }
+
+/* The bar (bar/): its widgets in [bar] text and "active" colors. */
+window.bar-window { background: transparent; }
+.bar-button label { color: $BAR_TEXT; font-size: $FS_BODY; }
+.bar-button.bar-icon label { font-size: $BAR_ICON_FONT; }
+.bar-button.bar-status label { font-size: $FS_CAPTION; }
+.bar-button.active label { color: $BAR_ACTIVE; }
+.bar-button.dimmed { opacity: 0.45; }
+.bar-button.bar-screenshare label { color: #e5252a; }
+.bar-emblem { opacity: 0.9; }
+.bar-emblem:hover { opacity: 1; }
+.bar-emblem-glyph { font-family: "doxia"; color: $BAR_TEXT; }
+.bar-workspace { font-size: $BAR_ICON_FONT; color: alpha($BAR_TEXT, 0.55); border-radius: 999px; }
+.bar-workspace.number { font-size: $BAR_ICON_FONT_NUMBER; }
+.bar-workspace.occupied { color: $BAR_TEXT; font-weight: 500; }
+.bar-workspace.focused { color: $ACCENT; font-weight: 500; }
+.bar-workspace:hover:not(.focused) { background: alpha($BAR_TEXT, 0.1); }
+tooltip.background {
+  background: $TIP_BG;
+  border: 1px solid $TIP_BORDER;
+  border-radius: $R_CTRL;
+  color: $TIP_TEXT;
+}
+tooltip.background label { padding: 3px 4px; font-size: $FS_BODY; }
+
+/* The bar's panels (bar/panel.rs): the card is drawn, the rest is text. */
+window.panel-window { background: transparent; }
+.panel-content, .panel-tabs { color: $POPUP_TEXT; }
+.panel-action { font-size: $FS_TITLE; padding: 0; min-width: 34px; min-height: 34px; border-radius: 999px; color: $POPUP_TEXT; }
+.panel-action:hover { background: $HOVER_FILL; color: $ACCENT; }
+.calendar-hero-icon { font-size: 48px; }
+.calendar-hero-date { font-size: 52px; font-weight: bold; }
+.calendar-hero.link:hover label { color: $ACCENT; }
+.calendar-caption { font-size: $FS_SMALL; letter-spacing: 1px; color: alpha($POPUP_TEXT, 0.66); }
+.calendar-small { font-size: $FS_SMALL; }
+.calendar-track { color: $POPUP_TEXT; }
+.calendar-week-head { font-size: $FS_CAPTION; font-weight: bold; letter-spacing: 1px; color: alpha($POPUP_TEXT, 0.5); border-radius: $R_CTRL; }
+.calendar-week-head:hover { background: $HOVER_FILL; color: $ACCENT; }
+.calendar-weekday { font-size: $FS_CAPTION; font-weight: bold; letter-spacing: 1px; color: alpha($POPUP_TEXT, 0.66); }
+.calendar-week { font-size: $FS_CAPTION; color: alpha($POPUP_TEXT, 0.5); }
+.calendar-rule { background: alpha($POPUP_TEXT, 0.1); }
+.calendar-day { font-size: $FS_BODY; border-radius: $R_CTRL; border: 1px solid transparent; }
+.calendar-day.weekend { color: alpha($POPUP_TEXT, 0.69); }
+.calendar-day.outside { color: alpha($POPUP_TEXT, 0.45); }
+.calendar-day.today { font-weight: bold; border-color: $NORMAL_BORDER; }
+.calendar-month { font-size: $FS_BODY; letter-spacing: 1px; color: alpha($POPUP_TEXT, 0.71); }
+.bar-button.caption label { font-size: $FS_CAPTION; }
+.bar-button.staged label { color: $WARN; }
+.bar-button.failed label { color: $URGENT; }
+.bar-button.running label { color: $ACCENT; }
+.panel-hero-icon { font-size: 24px; color: $POPUP_TEXT; }
+.panel-hero-icon.staged { color: $WARN; }
+.panel-hero-icon.failed { color: $URGENT; }
+.panel-hero-icon.running { color: $ACCENT; }
+.panel-hero-title { font-size: $FS_TITLE; font-weight: bold; }
+.panel-hero-subtitle { font-size: $FS_CAPTION; font-weight: bold; letter-spacing: 1.2px; color: alpha($POPUP_TEXT, 0.71); }
+.panel-section { font-size: $FS_CAPTION; font-weight: bold; letter-spacing: 1.2px; color: alpha($POPUP_TEXT, 0.66); }
+.panel-separator { min-height: 1px; background: alpha($POPUP_TEXT, 0.1); }
+.panel-text { font-size: $FS_SMALL; }
+.panel-text.dim { color: alpha($POPUP_TEXT, 0.8); }
+.panel-rail { color: $POPUP_TEXT; }
+.panel-row { border-radius: $R_CTRL; padding: 4px 6px; }
+.panel-row:hover { background: $HOVER_FILL; }
+.panel-row.selected { background: $SELECTED_FILL; }
+.weather-hero-icon { font-size: 64px; }
+.weather-temp { font-size: 56px; font-weight: bold; }
+.weather-unit { font-size: 24px; }
+.weather-place label { font-size: $FS_BODY; letter-spacing: 1px; color: alpha($POPUP_TEXT, 0.71); }
+.weather-place:hover label { color: $ACCENT; }
+.weather-clear { font-size: $FS_SMALL; color: alpha($POPUP_TEXT, 0.71); padding: 0 4px; border-radius: 4px; }
+.weather-clear:hover { background: $HOVER_FILL; }
+.weather-stat-name { font-size: $FS_SMALL; letter-spacing: 1px; color: alpha($POPUP_TEXT, 0.66); }
+.weather-stat { font-size: $FS_TITLE; }
+.weather-loading { font-size: $FS_SMALL; font-style: italic; color: alpha($POPUP_TEXT, 0.66); }
+.weather-caption { font-size: $FS_CAPTION; letter-spacing: 1px; color: alpha($POPUP_TEXT, 0.71); }
+.weather-caption.link:hover { color: $ACCENT; }
+.weather-readout { font-size: $FS_SMALL; }
+.weather-readout.dim { color: alpha($POPUP_TEXT, 0.71); }
+.weather-day { padding: 6px 12px; border-radius: $R_CTRL; }
+.weather-day:hover, .weather-day.picked { background: $HOVER_FILL; }
+.weather-day-icon { font-size: 24px; }
+.weather-day-temp { font-size: $FS_BODY; }
+.weather-day-temp.low { color: alpha($POPUP_TEXT, 0.66); }
+.weather-suggestion { font-size: $FS_BODY; }
+.weather-suggestion-region { font-size: $FS_SMALL; color: alpha($POPUP_TEXT, 0.66); }
+.bar-media-glyph { font-size: 10px; color: $BAR_TEXT; }
+.bar-media-glyph.dim { color: alpha($BAR_TEXT, 0.66); }
+.bar-media-title { color: $BAR_TEXT; font-size: $FS_BODY; }
+.bar-media, .bar-media-focus { transition: opacity 350ms ease-out, filter 350ms ease-out; }
+.bar-media.away { opacity: 0; filter: blur(6px); }
+.bar-media-focus { color: $BAR_TEXT; font-size: $FS_BODY; opacity: 0; filter: blur(6px); }
+.bar-media-focus.shown { opacity: 1; filter: blur(0); }
+.media-art { border-radius: 4px; background: $NORMAL_FILL; border: 1px solid $NORMAL_BORDER; }
+.media-art-glyph { font-size: 56px; color: alpha($POPUP_TEXT, 0.64); }
+.media-title { font-size: $FS_HEADING; font-weight: bold; }
+.media-artist { font-size: $FS_BODY; color: alpha($POPUP_TEXT, 0.8); }
+.media-album, .media-time, .media-source { font-size: $FS_CAPTION; color: alpha($POPUP_TEXT, 0.64); }
+.media-control { font-size: 18px; padding: 6px 10px; }
+.media-control.big { font-size: 25px; }
+.media-control.off { color: alpha($POPUP_TEXT, 0.64); }
+.media-control:hover { color: shade($POPUP_TEXT, 1.25); }
+.media-volume-icon { font-size: $FS_TITLE; }
+.media-volume-icon.dim { color: alpha($POPUP_TEXT, 0.64); }
+.media-volume-text { font-size: $FS_CAPTION; font-weight: bold; color: alpha($POPUP_TEXT, 0.64); }
+.media-other { font-size: $FS_SMALL; }
+.media-other.bold { font-weight: bold; }
+.tray-item picture.symbolic { filter: brightness(0) invert(1); }
+.tray-menu-row { padding: 0; min-height: 26px; }
+.tray-menu-mark { min-width: 22px; font-size: $FS_SMALL; }
+.tray-menu-text { font-size: $FS_SMALL; margin-right: 8px; }
+.tray-menu-sub { font-size: $FS_SMALL; margin-right: 10px; }
+.tray-menu-rule { opacity: 0.45; }
+.tray-manage-title { font-size: $FS_BODY; font-weight: bold; }
+.tray-manage-empty { font-size: $FS_SMALL; font-style: italic; color: alpha($POPUP_TEXT, 0.66); }
+.tray-manage-name { font-size: $FS_SMALL; }
+.panel-tab { min-height: 28px; border-radius: $R_CTRL; background: alpha($POPUP_TEXT, 0.04); }
+.panel-tab:hover { background: alpha($POPUP_TEXT, 0.10); }
+.panel-tab.current { background: alpha($ACCENT, 0.28); }
+.panel-tab-glyph { font-size: $FS_TITLE; }
+.panel-tab-title { font-size: $FS_BODY; opacity: 0.7; }
+.panel-tab-title.current { opacity: 1; font-weight: bold; }
+.cursor { box-shadow: inset 0 0 0 1px $HOVER_BORDER; border-radius: $R_CTRL; }
+.audio-percent { font-size: $FS_CAPTION; font-weight: bold; color: alpha($POPUP_TEXT, 0.71); }
+.audio-slider-row { padding: 2px 0; border-radius: $R_CTRL; }
+.audio-device-glyph { font-size: $FS_TITLE; }
+.audio-device { font-size: $FS_BODY; }
+.audio-device.bold, .audio-stream-name.bold { font-weight: bold; }
+.audio-stream-name { font-size: $FS_BODY; }
+.audio-stream { padding: 4px 6px; border-radius: $R_CTRL; }
+.power-percent { font-size: 28px; font-weight: bold; }
+.power-info-label { font-size: $FS_SMALL; opacity: 0.6; }
+.power-info-value { font-size: $FS_SMALL; }
+button.ctl.profile { padding: 8px 10px; font-size: $FS_SMALL; }
+button.ctl.scale { padding: 6px 4px; font-size: $FS_SMALL; }
+.network-signal { font-size: $FS_TITLE; min-width: 22px; }
+.network-ssid { font-size: $FS_BODY; }
+.network-ssid.bold { font-weight: bold; }
+.network-status { font-size: $FS_CAPTION; color: alpha($POPUP_TEXT, 0.66); }
+.network-status.failed { color: $URGENT; }
+.network-lock { font-size: $FS_SMALL; color: alpha($POPUP_TEXT, 0.66); }
+.copyable:hover { color: $ACCENT; }
+.service-dot { font-size: 11px; color: alpha($POPUP_TEXT, 0.3); }
+.service-dot.running { color: #5fb878; }
+.service-dot.failed { color: $URGENT; }
+.service-dot.busy { color: $ACCENT; }
+.service-name { font-size: $FS_BODY; font-weight: bold; }
+.service-type { font-size: $FS_CAPTION; opacity: 0.75; border: 1px solid alpha($POPUP_TEXT, 0.35); border-radius: $R_CTRL; padding: 0 5px; }
+.service-state { font-size: $FS_CAPTION; opacity: 0.6; }
+.service-state.failed { color: $URGENT; opacity: 1; }
+.service-line-icon { font-size: $FS_BODY; opacity: 0.6; min-width: 16px; }
+.panel-action.start { color: #5fb878; }
+.panel-action.stop, .panel-action.failed { color: $URGENT; }
+.panel-text.failed, .fortivpn-glyph.failed { color: $URGENT; }
+.fortivpn-status { font-size: $FS_CAPTION; color: alpha($POPUP_TEXT, 0.66); }
+.fortivpn-glyph { font-size: $FS_TITLE; }
+.dim { color: alpha($POPUP_TEXT, 0.66); }
+.agents-help { font-size: $FS_CAPTION; color: alpha($POPUP_TEXT, 0.66); background: alpha($URGENT, 0.10); border: 1px solid alpha($URGENT, 0.35); border-radius: $R_CTRL; padding: 8px 12px; }
+.agents-row { font-size: $FS_BODY; }
+.agents-value { font-size: $FS_CAPTION; }
+.agents-value.alarm { color: $URGENT; }
+.agents-caption { font-size: $FS_CAPTION; color: alpha($POPUP_TEXT, 0.64); }
+.agents-meter { color: $POPUP_TEXT; }
+.agents-day, .agents-day-value { font-size: $FS_CAPTION; color: alpha($POPUP_TEXT, 0.64); }
+.agents-day.today, .agents-day-value.today { color: $POPUP_TEXT; font-weight: bold; }
+.agents-day-value { font-weight: bold; }
+.agents-model { border-radius: 4px; background: alpha($POPUP_TEXT, 0.05); color: $POPUP_TEXT; }
+.agents-model-name { font-size: $FS_SMALL; }
+.agents-model-value { font-size: $FS_SMALL; font-weight: bold; color: alpha($POPUP_TEXT, 0.64); }
+.bar-button.silenced label { color: alpha($BAR_TEXT, 0.6); }
+.bar-doxia label { font-family: "doxia"; }
+.bar-doxia-workspace { color: $BAR_TEXT; font-size: $FS_BODY; }
+window.overlay-window { background: rgba(0, 0, 0, 0.78); }
+.overlay-title { font-size: $FS_CAPTION; font-weight: bold; letter-spacing: 2px; color: rgba(255, 255, 255, 0.55); }
+.overlay-dim { font-size: $FS_SMALL; color: rgba(255, 255, 255, 0.55); }
+.overlay-error { font-size: $FS_SMALL; color: #ff6b6b; }
+.overlay-password { font-size: $FS_SMALL; color: rgba(255, 255, 255, 0.6); }
+.overlay-password.visible { color: white; }
+button.ctl.overlay-again { color: white; padding: 4px 14px; font-size: $FS_SMALL; }

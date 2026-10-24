@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# doxia:summary=Open a config file in the user's editor and surface a toast
+# doxia:args=<path>
+# doxia:examples=doxia launch config-editor ~/.config/mango/config.conf
+
+path="${1-}"
+
+if [[ -z $path ]]; then
+  echo "Usage: doxia-launch-config-editor <path>" >&2
+  exit 1
+fi
+
+doxia-notification-send -u low "Editando arquivo de configuração" "$path"
+exec doxia-launch-editor "$path"

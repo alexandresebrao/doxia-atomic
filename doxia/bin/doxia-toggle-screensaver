@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# doxia:summary=Toggle screensaver availability
+
+doxia-toggle screensaver-off
+
+if doxia-toggle-enabled screensaver-off; then
+  doxia-notification-send -g 󱄄 "Protetor de tela desativado"
+else
+  doxia-notification-send -g 󱄄 "Protetor de tela ativado"
+fi

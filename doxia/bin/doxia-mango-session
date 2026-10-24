@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# doxia:summary=Start the mango compositor for the DoxIA session
+# doxia:hidden=true
+
+# uwsm runs this as the session compositor (see default/wayland-sessions).
+
+STATE_DIR="$HOME/.local/state/doxia/mango"
+
+# mango's source= only expands ~, so the defaults are reached through a link
+# that follows $DOXIA_PATH.
+mkdir -p "$STATE_DIR"
+ln -sfn "$DOXIA_PATH/default/mango" "$STATE_DIR/default"
+doxia-mango-bindings
+
+# Themes' blur is too heavy for llvmpipe: lighter effects inside a VM.
+if systemd-detect-virt --vm --quiet; then
+  ln -sfn "$DOXIA_PATH/default/mango/vm.conf" "$STATE_DIR/vm.conf"
+else
+  rm -f "$STATE_DIR/vm.conf"
+fi
+
+# hyperv_drm's preferred 1024x768 is blurry. Only on Hyper-V, so a VM moved to
+# VMware gets its own size, and only while the user set no monitor rule: mango
+# would apply this one first on new outputs.
+if [[ $(systemd-detect-virt 2>/dev/null) == "microsoft" ]] &&
+   ! grep -q '^monitor_rule=' "$HOME/.config/mango/monitors.conf" 2>/dev/null; then
+  ln -sfn "$DOXIA_PATH/default/mango/hyperv.conf" "$STATE_DIR/hyperv.conf"
+else
+  rm -f "$STATE_DIR/hyperv.conf"
+fi
+
+# DoxIA's compose sequences (doxia-restart-xcompose writes the file).
+export XCOMPOSEFILE="$HOME/.XCompose"
+
+# NVIDIA video decode and GLX. The detectors read cached sysfs IDs rather than
+# lspci, which would wake a runtime-suspended GPU on a hybrid laptop.
+if doxia-hw-nvidia; then
+  if doxia-hw-nvidia-gsp; then
+    export NVD_BACKEND=direct LIBVA_DRIVER_NAME=nvidia __GLX_VENDOR_LIBRARY_NAME=nvidia
+  elif doxia-hw-nvidia-without-gsp; then
+    export NVD_BACKEND=egl __GLX_VENDOR_LIBRARY_NAME=nvidia
+  fi
+fi
+
+# No render node (Hyper-V's hyperv_drm, plain KMS framebuffers): render with
+# llvmpipe on the primary node instead of refusing to start.
+if ! compgen -G "/dev/dri/renderD*" >/dev/null; then
+  export WLR_RENDERER_ALLOW_SOFTWARE=1
+fi
+
+virt=$(systemd-detect-virt 2>/dev/null)
+
+# hyperv_drm has no cursor plane, and vmwgfx rejects the GEM handles of the
+# cursor framebuffers (drmCloseBufferHandle EINVAL), so in both the hardware
+# cursor is invisible: draw it in software.
+if [[ $virt == "microsoft" || $virt == "vmware" ]]; then
+  export WLR_NO_HARDWARE_CURSORS=1
+fi
+
+if [[ $virt == "microsoft" ]]; then
+  # Partial redraws leave stale squares flickering on hyperv_drm's dumb
+  # buffers, so repaint the whole output every frame.
+  export WLR_SCENE_DEBUG_DAMAGE=rerender
+  export WLR_SCENE_DISABLE_DIRECT_SCANOUT=1
+fi
+
+exec mango "$@"

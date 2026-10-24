@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# doxia:summary=Control the DoxIA menu (toggle / summon / close / refresh)
+# doxia:args=[toggle|summon|close|refresh|ping] [route]
+# doxia:examples=doxia menu | doxia menu toggle system | doxia menu summon style.theme | doxia menu refresh
+
+# Thin wrapper around the standard plugin IPC surface. The menu is the
+# first-party `doxia.menu` plugin; routes are passed as JSON payload.
+
+set -euo pipefail
+
+verb="${1-toggle}"
+route="${2-root}"
+
+menu_payload() {
+  jq -nc --arg menu "$1" '{ menu: $menu }'
+}
+
+case "$verb" in
+  toggle)
+    exec doxia-shell-call shell toggle doxia.menu "$(menu_payload "$route")"
+    ;;
+  summon)
+    exec doxia-shell-call shell summon doxia.menu "$(menu_payload "$route")"
+    ;;
+  close)
+    exec doxia-shell-call shell hide doxia.menu
+    ;;
+  refresh | ping)
+    exec doxia-shell-call shell call doxia.menu "$verb" "{}"
+    ;;
+  -h | --help | help)
+    cat <<USAGE
+Usage: doxia menu [verb] [route]
+
+Verbs:
+  toggle [route]   Open the menu at <route>, or close it if already open. Default verb.
+  summon [route]   Always open the menu (no close-if-visible toggle).
+  close            Close the menu if it is visible.
+  refresh          Re-parse the menu JSONC files.
+  ping             Health check.
+
+Route is an item id (e.g. setup.power) or alias (e.g. power). Defaults to
+"root", which opens the top-level menu.
+USAGE
+    exit 0
+    ;;
+  *)
+    echo "doxia-menu: unknown verb '$verb'. Try 'doxia menu --help'." >&2
+    exit 2
+    ;;
+esac

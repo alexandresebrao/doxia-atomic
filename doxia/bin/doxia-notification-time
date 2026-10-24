@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# doxia:summary=Show the current time and date notification
+
+doxia-notification-send -g  -u low "$(date +"%A %H:%M  ·  %d %B %Y  ·  Semana %V")"

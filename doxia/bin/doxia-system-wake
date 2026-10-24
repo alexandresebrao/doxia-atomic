@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# doxia:summary=Wake displays and restore brightness after idle
+# doxia:group=system
+# doxia:name=wake
+# doxia:examples=doxia system wake
+
+doxia-brightness-display on
+doxia-brightness-keyboard restore
+doxia-mango-monitor-clamshell >/dev/null 2>&1 || true

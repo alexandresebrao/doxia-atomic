@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# doxia:summary=Print the directory holding a theme, preferring a user-installed copy
+# doxia:args=<theme-name>
+# doxia:examples=doxia theme dir doxia
+
+theme="${1:-}"
+
+if [[ -z $theme ]]; then
+  echo "Usage: doxia-theme-dir <theme-name>" >&2
+  exit 1
+fi
+
+if [[ -d $HOME/.config/doxia/themes/$theme ]]; then
+  echo "$HOME/.config/doxia/themes/$theme"
+else
+  echo "$DOXIA_PATH/themes/$theme"
+fi

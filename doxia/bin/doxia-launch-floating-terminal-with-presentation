@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# doxia:summary=Launch a floating terminal with the DoxIA presentation wrapper
+# doxia:args=<command>
+
+# Export the current theme's gum styling so gum widgets match the active theme
+# even after a theme switch (the inherited environment is captured at login).
+source doxia-restart-gum
+
+cmd="$*"
+presentation_script="doxia-show-logo; $cmd; if (( \$? != 130 )); then doxia-show-done; fi"
+
+exec setsid uwsm-app -- xdg-terminal-exec --app-id=org.doxia.terminal --title=DoxIA -e bash -c "$presentation_script"

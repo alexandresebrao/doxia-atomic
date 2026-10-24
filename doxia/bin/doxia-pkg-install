@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# doxia:summary=Show a fuzzy-finder TUI for picking new Fedora packages to install.
+# doxia:requires-sudo=true
+# Fedora port: dnf instead of pacman.
+
+fzf_args=(
+  --multi
+  --preview 'dnf -q -C info {1} 2>/dev/null || dnf -q info {1}'
+  --preview-label='alt-p: toggle description, alt-j/k: scroll, tab: multi-select'
+  --preview-label-pos='bottom'
+  --preview-window 'down:65%:wrap'
+  --bind 'alt-p:toggle-preview'
+  --bind 'alt-d:preview-half-page-down,alt-u:preview-half-page-up'
+  --bind 'alt-k:preview-up,alt-j:preview-down'
+  --color 'pointer:green,marker:green'
+)
+
+# Cached metadata keeps the list instant; refresh only when there is no cache yet.
+available=$(dnf -q -C repoquery --available --qf '%{name}\n' 2>/dev/null)
+[[ -z $available ]] && available=$(dnf -q repoquery --available --qf '%{name}\n' 2>/dev/null)
+
+# Leave out what is already installed.
+pkg_names=$(comm -23 <(sort -u <<<"$available") <(rpm -qa --qf '%{NAME}\n' | sort -u) | fzf "${fzf_args[@]}")
+
+if [[ -n $pkg_names ]]; then
+  source doxia-sudo-keepalive
+
+  # Convert newline-separated selections to space-separated for dnf
+  echo "$pkg_names" | tr '\n' ' ' | xargs sudo dnf install -y
+  doxia-show-done
+fi

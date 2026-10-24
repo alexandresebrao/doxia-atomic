@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# doxia:summary=Enable, disable, toggle, or recover mirroring the internal display to an external monitor
+# doxia:args=<on|off|toggle|recover>
+
+# mango has no output mirroring, so wl-mirror shows the laptop display
+# fullscreen on the external monitor.
+
+PID_FILE="${XDG_RUNTIME_DIR:-/tmp}/doxia-monitor-mirror.pid"
+
+INTERNAL=$(doxia-mango-monitor-laptop)
+EXTERNAL=$(wlr-randr --json 2>/dev/null | jq -r '.[] | select(.enabled == true) | select(.name | test("^(eDP|LVDS|DSI)-") | not).name' | head -n 1)
+
+running() {
+  [[ -f $PID_FILE ]] && kill -0 "$(<"$PID_FILE")" 2>/dev/null
+}
+
+on() {
+  if [[ -z $EXTERNAL ]]; then
+    doxia-notification-send -g 󰍹 "Nenhum monitor externo encontrado para espelhar"
+    exit 1
+  fi
+
+  if [[ -z $INTERNAL ]]; then
+    doxia-notification-send -g 󰍹 "Nenhuma tela de notebook encontrada para espelhar"
+    exit 1
+  fi
+
+  running && return 0
+  doxia-mango-monitor-internal on >/dev/null
+
+  setsid wl-mirror --fullscreen-output "$EXTERNAL" "$INTERNAL" >/dev/null 2>&1 &
+  echo $! >"$PID_FILE"
+  doxia-notification-send -g 󰍹 "Espelhamento ativado ($EXTERNAL)"
+}
+
+off() {
+  if running; then
+    kill "$(<"$PID_FILE")" 2>/dev/null
+    rm -f "$PID_FILE"
+    doxia-notification-send -g 󰍹 "Modo estendido restaurado"
+  fi
+}
+
+recover() {
+  if ! doxia-mango-monitor-external-active && running; then
+    kill "$(<"$PID_FILE")" 2>/dev/null
+    rm -f "$PID_FILE"
+  fi
+}
+
+case "$1" in
+  on) on ;;
+  off) off ;;
+  toggle) if running; then off; else on; fi ;;
+  recover) recover ;;
+  *)
+    echo "Usage: $(basename "$0") {on|off|toggle|recover}" >&2
+    exit 1
+    ;;
+esac

@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# doxia:summary=Remove all the named packages from the system if they're installed (otherwise ignore).
+# doxia:args=<packages...>
+# doxia:requires-sudo=true
+# Fedora port: rpm/dnf instead of pacman/yay.
+
+installed=()
+for pkg in "$@"; do
+  rpm -q "$pkg" &>/dev/null && installed+=("$pkg")
+done
+
+if (( ${#installed[@]} > 0 )); then
+  sudo dnf remove -y "${installed[@]}"
+fi

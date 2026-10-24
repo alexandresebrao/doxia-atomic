@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=DoxIA
+Comment=DoxIA mango session managed by uwsm
+Exec=uwsm start -g -1 -e -D mango:wlroots -N mango -- /usr/share/doxia/bin/doxia-mango-session
+TryExec=uwsm
+DesktopNames=mango;wlroots
+Type=Application

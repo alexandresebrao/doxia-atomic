@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# doxia:summary=Toggle nightlight screen temperature
+# doxia:args=[--status]
+# doxia:examples=doxia toggle nightlight
+
+ON_TEMP=4000
+OFF_TEMP=6500
+IDENTITY_TEMP=6000
+
+current_temp() {
+  local output
+
+  doxia-nightlight-temperature
+}
+
+status_json() {
+  local temp enabled
+
+  temp=$(current_temp)
+  if [[ -n $temp ]] && (( temp < IDENTITY_TEMP )); then
+    enabled=true
+  else
+    enabled=false
+  fi
+
+  jq -cn --argjson enabled "$enabled" --arg temp "$temp" \
+    '{enabled:$enabled, temperature:(($temp | tonumber?) // null)}'
+}
+
+if [[ ${1:-} == "--status" ]]; then
+  status_json
+  exit 0
+fi
+
+# Query the current temperature
+CURRENT_TEMP=$(current_temp)
+
+if [[ -z $CURRENT_TEMP || $CURRENT_TEMP == $OFF_TEMP ]]; then
+  TARGET_TEMP=$ON_TEMP
+else
+  TARGET_TEMP=$OFF_TEMP
+fi
+
+doxia-nightlight-temperature $TARGET_TEMP
+
+doxia-shell-call -q nightlight refresh

@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# doxia:summary=Cycle to the next media source and transfer playback when the current source is playing
+# doxia:args=[next|previous]
+# doxia:examples=doxia audio source switch | doxia-audio-source-switch previous
+
+direction="${1:-next}"
+
+case "$direction" in
+  next)
+    doxia-shell-call media sourceSwitch
+    ;;
+  previous)
+    doxia-shell-call media sourceSwitchPrevious
+    ;;
+  *)
+    echo "Usage: doxia-audio-source-switch [next|previous]" >&2
+    exit 1
+    ;;
+esac

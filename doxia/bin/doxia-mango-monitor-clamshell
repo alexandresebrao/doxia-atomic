@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# doxia:summary=Apply clamshell display state to mango monitors
+# doxia:hidden=true
+
+# Lid shut with an external monitor on: the laptop display goes off. Anything
+# else brings it back (unless it was turned off by hand).
+
+FLAG="$HOME/.local/state/doxia/toggles/mango/internal-monitor-clamshell"
+
+doxia-mango-monitor-internal recover >/dev/null 2>&1 || true
+doxia-mango-monitor-internal-mirror recover >/dev/null 2>&1 || true
+
+[[ -n $(doxia-mango-monitor-laptop) ]] || exit 0
+
+if doxia-hw-clamshell && doxia-mango-monitor-external-active; then
+  [[ -f $FLAG ]] && exit 0
+  mkdir -p "$(dirname "$FLAG")"
+  touch "$FLAG"
+else
+  [[ -f $FLAG ]] || exit 0
+  rm -f "$FLAG"
+fi
+
+doxia-mango-monitor-apply

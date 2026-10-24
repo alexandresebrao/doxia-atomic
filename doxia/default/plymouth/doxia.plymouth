@@ -1,0 +1,11 @@
+[Plymouth Theme]
+Name=DoxIA
+Description=DoxIA splash screen.
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/doxia
+ScriptFile=/usr/share/plymouth/themes/doxia/doxia.script
+ConsoleLogBackgroundColor=0x1a1b26
+MonospaceFont=Cantarell 11
+Font=Cantarell 11

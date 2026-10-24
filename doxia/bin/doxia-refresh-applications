@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# doxia:summary=Ensure default application launchers are installed.
+
+# Copy .desktop declarations
+mkdir -p ~/.local/share/applications
+cp "$DOXIA_PATH"/applications/*.desktop ~/.local/share/applications/
+
+if doxia-cmd-present alacritty; then
+  cp "$DOXIA_PATH/default/alacritty/Alacritty.desktop" ~/.local/share/applications/
+fi
+
+update-desktop-database ~/.local/share/applications

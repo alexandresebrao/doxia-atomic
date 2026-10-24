@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# doxia:summary=Overwrite the user tmux config with the DoxIA default and reload tmux.
+
+doxia-refresh-config tmux/tmux.conf
+doxia-restart-tmux

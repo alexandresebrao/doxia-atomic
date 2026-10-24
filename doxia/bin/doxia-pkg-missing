@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# doxia:summary=Returns true if any of the named packages are missing from the system (or false if they're all there).
+# doxia:args=<packages...>
+# Fedora port: rpm/dnf instead of pacman/yay.
+
+for pkg in "$@"; do
+  if ! rpm -q --whatprovides "$pkg" &>/dev/null; then
+    exit 0
+  fi
+done
+
+exit 1

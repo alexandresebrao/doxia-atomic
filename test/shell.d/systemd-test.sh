@@ -1,0 +1,89 @@
+#!/bin/bash
+
+set -euo pipefail
+
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
+
+service="$ROOT/default/systemd/user/bt-agent.service"
+
+grep -Fx 'ExecCondition=/usr/bin/systemctl is-active --quiet bluetooth.service' "$service" >/dev/null
+pass "bt-agent skips when bluetooth.service is inactive"
+
+grep -Fx 'Restart=on-failure' "$service" >/dev/null
+pass "bt-agent still restarts after runtime failures"
+
+sleep_service="$ROOT/default/systemd/user/doxia-sleep-lock.service"
+grep -Fx 'ExecStart=/usr/bin/doxia-system-sleep-monitor' "$sleep_service" >/dev/null
+pass "sleep lock service uses the package-backed monitor path"
+
+grep -Fx 'After=dbus.socket wayland-session-waitenv.service' "$sleep_service" >/dev/null ||
+  fail "sleep lock monitor starts before UWSM imports the graphical session environment"
+grep -Fx 'PartOf=graphical-session.target' "$sleep_service" >/dev/null ||
+  fail "sleep lock monitor survives logout with a stale Wayland environment"
+grep -Fx 'ConditionEnvironment=DOXIA_PATH' "$sleep_service" >/dev/null ||
+  fail "sleep lock monitor can start without the DoxIA shell path"
+grep -Fx 'ConditionEnvironment=WAYLAND_DISPLAY' "$sleep_service" >/dev/null ||
+  fail "sleep lock monitor can start without a Wayland display"
+pass "sleep lock service follows the initialized graphical session"
+
+[[ -e $ROOT/default/systemd/user/doxia-update-user-notify.path ]] &&
+  fail "the retired migration watcher is back; pacman writing the migration directory during doxia update would notify about migrations that update is already applying"
+grep -rlE '^(Path[A-Za-z]+|DirectoryNotEmpty)=.*/usr/share/doxia/migrations' "$ROOT/default/systemd/user" >/dev/null 2>&1 &&
+  fail "a user unit watches the migration directory again; the notifier must stay login-only"
+pass "no unit watches the migration directory, so package updates cannot trigger the notifier"
+
+notify_service="$ROOT/default/systemd/user/doxia-migrate-notify.service"
+grep -Fx 'ExecStart=/usr/bin/doxia-migrate-notify' "$notify_service" >/dev/null
+grep -Fx 'WantedBy=graphical-session.target' "$notify_service" >/dev/null
+grep -Fx 'After=graphical-session.target' "$notify_service" >/dev/null ||
+  fail "migration notifier can deadlock UWSM by blocking graphical-session.target"
+pass "migration notifier checks once per login after the graphical session is ready"
+
+grep -F 'doxia-migrate-notify' "$ROOT/fedora/doxia/install-user-units" >/dev/null ||
+  fail "install does not enable the login migration notifier"
+pass "install enables the login-only migration notifier"
+
+fcitx_service="$ROOT/default/systemd/user/doxia-fcitx5.service"
+grep -Fx 'ExecStart=/usr/bin/fcitx5 --disable notificationitem' "$fcitx_service" >/dev/null
+grep -Fx 'Restart=always' "$fcitx_service" >/dev/null ||
+  fail "fcitx5 exits 0 on a duplicate bus name, so on-failure would leave the user with no input method"
+grep -Fx 'After=graphical-session.target' "$fcitx_service" >/dev/null ||
+  fail "fcitx5 needs WAYLAND_DISPLAY, which uwsm imports before it reaches graphical-session.target"
+grep -Fx 'PartOf=graphical-session.target' "$fcitx_service" >/dev/null ||
+  fail "fcitx5 must stop with the compositor instead of lingering against a dead wayland socket"
+grep -Fx 'WantedBy=graphical-session.target' "$fcitx_service" >/dev/null ||
+  fail "fcitx5 is never pulled in at login without a WantedBy"
+grep -Fx 'ConditionEnvironment=WAYLAND_DISPLAY' "$fcitx_service" >/dev/null ||
+  fail "an update over SSH has a live user manager and no display; starting fcitx5 there wedges the unit active-but-blind, and Wants= will not replace it at graphical login"
+
+grep -F 'pkill -x fcitx5' "$ROOT/bin/doxia-restart-xcompose" >/dev/null ||
+  fail "restart-xcompose cannot reload a fcitx5 running outside the unit, so it silently keeps serving the old table"
+
+# DoxIA runs no input method: GTK, Qt and Chromium read ~/.XCompose themselves,
+# and fcitx5 between the keyboard and every app risks the ABNT2 dead keys.
+grep -F 'fcitx5' "$ROOT/fedora/doxia/install-user-units" >/dev/null &&
+  fail "install leaves the fcitx5 input method off"
+grep -rF 'fcitx5' "$ROOT"/default/mango/*.conf >/dev/null &&
+  fail "mango does not autostart fcitx5"
+pass "DoxIA leaves the fcitx5 input method off"
+
+oomd_slice="$ROOT/default/systemd/user/app.slice.d/10-oomd.conf"
+grep -Fx 'ManagedOOMMemoryPressure=kill' "$oomd_slice" >/dev/null ||
+  fail "nothing is a kill candidate, so systemd-oomd watches the machine thrash and never acts"
+grep -Fx 'ManagedOOMSwap=kill' "$oomd_slice" >/dev/null ||
+  fail "no swap backstop for the slower shape of the same failure"
+
+# Hyprland lives in session.slice/wayland-wm@hyprland.desktop.service. Marking
+# any ancestor of that as a kill candidate puts the compositor back in the
+# victim pool, which is the crash this whole thing exists to prevent.
+candidates=$(grep -rlE '^ManagedOOM(MemoryPressure|Swap)=kill' "$ROOT/default/systemd" "$ROOT/etc/systemd" 2>/dev/null || true)
+[[ $candidates == "$oomd_slice" ]] ||
+  fail "systemd-oomd kill candidacy is set outside app.slice, which can select the compositor: $candidates"
+pass "only user app scopes are systemd-oomd kill candidates"
+
+oomd_conf="$ROOT/etc/systemd/oomd.conf.d/10-doxia.conf"
+grep -Fx 'DefaultMemoryPressureLimit=50%' "$oomd_conf" >/dev/null ||
+  fail "no pressure limit; the 60% default rides thrashing longer than a desktop stays usable"
+grep -Fx 'DefaultMemoryPressureDurationSec=20s' "$oomd_conf" >/dev/null ||
+  fail "no pressure duration set for the tightened limit"
+pass "systemd-oomd acts on sustained memory stall"

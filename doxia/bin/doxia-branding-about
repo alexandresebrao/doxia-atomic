@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# doxia:summary=Edit, set, or reset About branding
+# doxia:group=branding
+# doxia:name=about
+# doxia:args=<image|text|reset>
+# doxia:examples=doxia branding about image | doxia branding about text | doxia branding about reset
+
+set -euo pipefail
+
+case "${1:-}" in
+image)
+  image=$(doxia-file-select --title "Pick PNG or SVG for About" --extensions "png svg")
+  if doxia-transcode-ascii "$image" ~/.config/doxia/branding/about.txt --width 54 --height 26; then
+    doxia-launch-about >/dev/null 2>&1
+  fi
+  ;;
+text)
+  doxia-launch-editor ~/.config/doxia/branding/about.txt >/dev/null 2>&1 && doxia-launch-about >/dev/null 2>&1
+  ;;
+reset)
+  cp "$DOXIA_PATH/icon.txt" ~/.config/doxia/branding/about.txt && doxia-launch-about >/dev/null 2>&1
+  ;;
+*)
+  echo "Usage: doxia-branding-about <image|text|reset>" >&2
+  exit 1
+  ;;
+esac

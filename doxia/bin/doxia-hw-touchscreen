@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# doxia:summary=Print the detected touchscreen or tablet device name
+
+device=$(mmsg get all-devices | jq -r '[.devices[] | select(.types | any(. == "touch" or . == "tablet")) | .name] | first // empty')
+[[ -n $device ]] && echo "$device"

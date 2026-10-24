@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# doxia:summary=Apply the current theme keyboard color to supported keyboards
+# doxia:hidden=true
+
+doxia-theme-set-keyboard-asus-rog
+doxia-theme-set-keyboard-f16

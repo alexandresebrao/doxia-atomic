@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# doxia:summary=Review and optionally remove orphaned system packages after updates
+# doxia:args=[--auto]
+# doxia:requires-sudo=true
+# Fedora port: dnf's unneeded dependencies instead of pacman -Qtdq.
+
+set -e
+
+mapfile -t orphans < <(dnf -q repoquery --unneeded --qf '%{name}\n' 2>/dev/null | sort -u || true)
+(( ${#orphans[@]} )) || exit 0
+
+echo -e "\e[32m\nOrphan system packages\e[0m"
+printf '  %s\n' "${orphans[@]}"
+echo
+
+# --auto: the "Remover pacotes órfãos automaticamente" preference is on.
+if [[ ${1:-} == "--auto" ]]; then
+  [[ -n ${DOXIA_UPDATE_GUI:-} ]] && doxia-update-state frac orphans 0 "${#orphans[@]}"
+  sudo dnf autoremove -y
+  echo
+  exit 0
+fi
+
+if [[ ${DOXIA_UPDATE_UNATTENDED:-} == 1 || ! -t 0 || ! -t 1 ]]; then
+  [[ -n ${DOXIA_UPDATE_GUI:-} ]] && doxia-update-state frac orphans 0 "${#orphans[@]} mantidos"
+  echo "${#orphans[@]} orphaned package(s) found. Re-run doxia-update-orphan-pkgs in a terminal to review/remove them."
+  echo
+  exit 0
+fi
+
+if ! gum confirm --default=false "Remove ${#orphans[@]} orphaned package(s)?"; then
+  echo "Keeping orphaned packages."
+  echo
+  exit 0
+fi
+
+echo -e "\e[32m\nRemoving orphan system packages\e[0m"
+sudo dnf autoremove -y
+echo
