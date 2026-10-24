@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-doxia_path=$(dirname "$(dirname "$(dirname "$(readlink -f "$0")")")")
+doxia_path=${DOXIA_PATH:-/usr/share/doxia}
 plugins=$HOME/.config/doxia/plugins
 shell_json=$HOME/.config/doxia/shell.json
 
