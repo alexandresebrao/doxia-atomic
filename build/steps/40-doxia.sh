@@ -88,4 +88,6 @@ cp /usr/share/plymouth/themes/spinner/*.png "$theme/"
 install -m644 "$doxia"/default/plymouth/doxia/{doxia.plymouth,watermark.png} "$theme/"
 plymouth-set-default-theme doxia
 kver=$(ls /usr/lib/modules | head -1)
-dracut --no-hostonly --kver "$kver" --reproducible --zstd -f "/usr/lib/modules/$kver/initramfs.img"
+# ostree only joins when asked: without it the initramfs never sets up the
+# deployment as / and the boot ends in emergency mode.
+dracut --no-hostonly --kver "$kver" --reproducible --zstd --add ostree -f "/usr/lib/modules/$kver/initramfs.img"
