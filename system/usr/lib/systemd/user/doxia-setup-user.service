@@ -4,7 +4,6 @@
 [Unit]
 Description=DoxIA: set up this account
 Before=graphical-session-pre.target
-ConditionEnvironment=XDG_CURRENT_DESKTOP=mango:wlroots
 
 [Service]
 Type=oneshot

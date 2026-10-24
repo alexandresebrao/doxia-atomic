@@ -20,6 +20,25 @@ else
   rm -f "$STATE_DIR/vm.conf"
 fi
 
+# The system keyboard layout (localectl set-x11-keymap; the installer sets it),
+# over the defaults' us. ~/.config/mango/input.conf, sourced later, still wins.
+keyboard=/etc/X11/xorg.conf.d/00-keyboard.conf
+xkb() {
+  sed -n "s/^[[:space:]]*Option[[:space:]]*\"Xkb$1\"[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$keyboard" 2>/dev/null | head -1
+}
+layout=$(xkb Layout)
+if [[ -n $layout ]]; then
+  {
+    echo "xkb_rules_layout=$layout"
+    variant=$(xkb Variant)
+    [[ -n $variant ]] && echo "xkb_rules_variant=$variant"
+    options=$(xkb Options)
+    [[ -n $options ]] && echo "xkb_rules_options=$options"
+  } > "$STATE_DIR/keyboard.conf"
+else
+  rm -f "$STATE_DIR/keyboard.conf"
+fi
+
 # hyperv_drm's preferred 1024x768 is blurry. Only on Hyper-V, so a VM moved to
 # VMware gets its own size, and only while the user set no monitor rule: mango
 # would apply this one first on new outputs.
