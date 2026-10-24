@@ -21,7 +21,10 @@ the commit in `build/v1/IMPORTED_FROM`.
 Per account, `doxia/lib/setup-user` (DoxIA 1's `install-user.sh`) seeds
 `~/.config`, the theme, fonts, zsh, Chrome, Claude Code and Voxtype. The
 installer runs it for the account it creates; any other account gets it on
-its first login (`doxia-setup-user.service`).
+its first login, behind a "Preparando sua conta" screen with the steps and a
+progress bar (`doxia-setup-user.service`, `lib/setup-screen`, `doxia-greeter
+--setup`). Downloads that failed are retried once the session is up
+(`doxia-setup-retry.service`).
 
 ## Updates
 

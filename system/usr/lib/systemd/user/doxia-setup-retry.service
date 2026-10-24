@@ -1,0 +1,14 @@
+# The setup's downloads that failed (Chrome's extensions, Claude Code, the
+# Whisper model), tried again once the session is up, without holding the login.
+[Unit]
+Description=DoxIA: retry the account's failed downloads
+After=graphical-session.target
+ConditionPathExists=%h/.local/state/doxia/setup-done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/share/doxia/lib/setup-user
+Nice=10
+
+[Install]
+WantedBy=graphical-session.target

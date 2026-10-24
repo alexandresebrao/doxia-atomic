@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# An account's first login (doxia-setup-user.service, before the session):
+# lib/setup-user takes a few minutes, so it runs behind "Preparando sua conta"
+# (doxia-greeter --setup) inside a bare mango, like the login screen, instead
+# of a black screen. Without mango or the greeter it runs on its own.
+
+set -u
+
+export DOXIA_PATH=/usr/share/doxia
+data=$DOXIA_PATH/greeter
+config=$data/mango.conf
+
+# The login screen's environment fixes (default/greetd/doxia-greeter-session).
+if ! compgen -G "/dev/dri/renderD*" >/dev/null; then
+  export WLR_RENDERER_ALLOW_SOFTWARE=1
+fi
+virt=$(systemd-detect-virt 2>/dev/null)
+if [[ $virt == "microsoft" || $virt == "vmware" ]]; then
+  export WLR_NO_HARDWARE_CURSORS=1
+fi
+if [[ $virt == "microsoft" ]]; then
+  export WLR_SCENE_DEBUG_DAMAGE=rerender
+  export WLR_SCENE_DISABLE_DIRECT_SCANOUT=1
+  config=$data/mango-hyperv.conf
+fi
+
+# A display left over from the login's environment would make mango open
+# nested in it instead of on the screen.
+unset WAYLAND_DISPLAY DISPLAY
+
+if command -v mango >/dev/null && [[ -x /usr/bin/doxia-greeter ]]; then
+  run=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/doxia-setup.XXXXXX")
+  trap 'rm -rf "$run"' EXIT
+  mango -c "$config" -s "/usr/bin/doxia-greeter --setup; echo \$? > $run/status; mmsg dispatch quit"
+  # The screen ran setup-user; when it failed, the person chose to go on and
+  # the next login tries again.
+  [[ -s $run/status ]] && exit 0
+fi
+"$DOXIA_PATH/lib/setup-user"
+exit 0

@@ -21,4 +21,5 @@ install -m644 "$doxia/default/systemd/user/doxia-recover-internal-monitor.servic
 sed -i '/^\[Install\]/,$d' "$units/doxia-sleep-lock.service"
 
 systemctl --global enable bt-agent.service doxia-crash-watch.service \
-  doxia-recover-internal-monitor.service doxia-shell.service doxia-setup-user.service
+  doxia-recover-internal-monitor.service doxia-shell.service doxia-setup-user.service \
+  doxia-setup-retry.service

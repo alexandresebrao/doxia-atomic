@@ -3,8 +3,10 @@
 # Per-user setup of DoxIA: seeds ~/.config, the theme, fonts, shell and apps
 # for one account. Existing files are backed up, never clobbered. The
 # installer runs it from its kickstart for the account it creates; any other
-# account gets it on its first login (doxia-setup-user.service), before the
-# session starts. Leaves ~/.local/state/doxia/setup-done behind.
+# account gets it on its first login, before the session starts, behind
+# "Preparando sua conta" (doxia-setup-user.service, lib/setup-screen). Leaves
+# ~/.local/state/doxia/setup-done behind; after that it only retries the
+# downloads that failed (doxia-setup-retry.service, once the session is up).
 
 set -euo pipefail
 

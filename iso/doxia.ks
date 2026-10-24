@@ -41,8 +41,8 @@ printf 'user=%s\nsession=%s\n' "$user" /usr/share/wayland-sessions/doxia.desktop
 chown greetd:greetd "$state"
 restorecon -R /var/lib/greetd 2>/dev/null || true
 
-# What doxia-setup-user.service would do on the first login, done here so the
-# first login goes straight to the desktop.
+# What the first login would do behind "Preparando sua conta"
+# (doxia-setup-user.service), done here so it goes straight to the desktop.
 echo "==> Setting up $user (theme, fonts, shell, apps)"
 runuser -l "$user" -c 'dbus-run-session -- /usr/share/doxia/lib/setup-user' ||
   echo "  The setup did not finish; the first login runs it again."

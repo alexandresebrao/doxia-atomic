@@ -12,6 +12,10 @@
 //
 //   doxia-greeter              under greetd ($GREETD_SOCK)
 //   doxia-greeter --windowed   in a plain window, to look at it in a session
+//   doxia-greeter [--windowed] --setup [--snapshot <png>]
+//                              "Preparando sua conta" while lib/setup-user
+//                              runs, on an account's first login (setup.rs);
+//                              --snapshot saves it every 2 s as <png>.1, .2…
 //   doxia-greeter [--windowed] --snapshot <png> [keys]
 //                              saves the first monitor's screen to a PNG once
 //                              it settled (after `keys`, comma-separated: text,
@@ -21,6 +25,7 @@
 mod accounts;
 mod greetd;
 mod power;
+mod setup;
 
 use doxia_login::landscape;
 use gtk::prelude::*;
@@ -638,6 +643,11 @@ fn main() -> glib::ExitCode {
     return glib::ExitCode::FAILURE;
   }
   doxia_login::install_css();
+  if args.iter().any(|a| a == "--setup") {
+    let sky = Rc::new(Cell::new(None));
+    fetch_weather(sky.clone());
+    return setup::run(windowed, sky, snapshot_to);
+  }
   let main_loop = glib::MainLoop::new(None, false);
   let greeter = Greeter::new(main_loop.clone(), windowed);
   fetch_weather(greeter.sky.clone());
