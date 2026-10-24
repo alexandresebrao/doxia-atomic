@@ -13,6 +13,6 @@ https://github.com/alexandresebrao/DoxIA/releases/download/mangowm-0.18.2-1.doxi
 https://github.com/alexandresebrao/DoxIA/releases/download/uwsm-0.27.1-1.doxia1/uwsm-0.27.1-1.doxia1.fc44.noarch.rpm 606cac753b5c10824c75d2e090573f809993a937afadf0f36090020ed7441f0f
 https://github.com/alexandresebrao/DoxIA/releases/download/gpu-screen-recorder-6.1.5-1.doxia1/gpu-screen-recorder-6.1.5-1.doxia1.fc44.x86_64.rpm 73c605bce3f2b64e7a652451dba55511fffa18a90539fd31c56750d7af0b3d5a
 # DoxMail, the mail, calendar and contacts app
-https://github.com/alexandresebrao/DoxIA/releases/download/doxmail-3.60.2-0.20261022gite6280e278a/doxmail-3.60.2-0.20261022gite6280e278a.fc44.x86_64.rpm 43b0ee79db491710f9026fdf8f317826a9868d94840982622aff4997a25db05f
+https://github.com/alexandresebrao/DoxMail/releases/download/doxmail-3.60.2-0.20261024git0a828e5f09/doxmail-3.60.2-0.20261024git0a828e5f09.fc44.x86_64.rpm d1c063ec5f755674535116d69294fb44e6c2ca9658da119d93d30723db24e9f5
 # Voxtype dictation (upstream release; Fedora has no package)
 https://github.com/peteonrails/voxtype/releases/download/v1.1.1/voxtype-1.1.1-1.x86_64.rpm 5d0704d2f8bff4b02ca7d6ace1eab20caf8b3bbbc137f3e1a268af5021509872
