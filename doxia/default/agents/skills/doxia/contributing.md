@@ -3,13 +3,13 @@
 Read this when the user wants to report an DoxIA bug, suggest a feature, or
 contribute a fix upstream.
 
-DoxIA lives at https://github.com/alexandresebrao/doxia. Route requests to the
+DoxIA lives at https://github.com/alexandresebrao/doxia-atomic. Route requests to the
 right place:
 
 - **Verified bugs** -> GitHub issues. Issues are for validated bugs only, not
   support requests.
 - **Feature ideas and suggestions** ->
-  https://github.com/alexandresebrao/doxia/discussions/categories/suggestions
+  https://github.com/alexandresebrao/doxia-atomic/discussions/categories/suggestions
 - **Support and "is this a bug?" questions** -> the Discord community at
   https://doxia.org/discord. Start here when the problem isn't clearly a bug
   in DoxIA itself.
@@ -43,7 +43,7 @@ For screen-recording failures specifically, rerun with
 File the issue with `gh` when available:
 
 ```bash
-gh issue create --repo alexandresebrao/doxia --title "..." --body "..."
+gh issue create --repo alexandresebrao/doxia-atomic --title "..." --body "..."
 ```
 
 Include: what happened, what was expected, steps to reproduce, system details,
@@ -54,7 +54,7 @@ the debug log URL (or attached log), and the capture.
 Never develop against `/usr/share/doxia`. Clone a working copy instead:
 
 ```bash
-gh repo fork alexandresebrao/doxia --clone
+gh repo fork alexandresebrao/doxia-atomic --clone
 cd doxia
 ```
 

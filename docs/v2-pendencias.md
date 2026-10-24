@@ -50,5 +50,5 @@ um pacote que todo mundo precisa entra em `build/steps/20-packages.sh`.
   `$DOXIA_PATH/migrations`, que a v2 ainda não tem.
 - Quando um download do `setup-user` falha (Chrome, Claude Code ou
   Voxtype), as tentativas seguintes seguram o login até terminar.
-- Publicação: criar alexandresebrao/doxia no GitHub, o pacote no ghcr.io e
+- Publicação: o pacote no ghcr.io público e
   a chave do cosign (`SIGNING_SECRET`).

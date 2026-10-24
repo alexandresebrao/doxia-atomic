@@ -38,7 +38,7 @@
 
   // Learn
   "learn.keybindings": {"icon":"","label":"Atalhos de teclado","action":"doxia-menu-keybindings"},
-  "learn.doxia": {"icon":"","label":"DoxIA","action":"doxia-launch-webapp 'https://github.com/alexandresebrao/doxia'"},
+  "learn.doxia": {"icon":"","label":"DoxIA","action":"doxia-launch-webapp 'https://github.com/alexandresebrao/doxia-atomic'"},
   "learn.mango": {"icon":"","label":"mango","action":"doxia-launch-webapp 'https://github.com/mangowm/mango/wiki'"},
   "learn.arch": {"icon":"󰣇","label":"Arch","action":"doxia-launch-webapp 'https://wiki.archlinux.org/title/Main_page'"},
   "learn.neovim": {"icon":"","label":"Neovim","action":"doxia-launch-webapp 'https://www.lazyvim.org/keymaps'"},

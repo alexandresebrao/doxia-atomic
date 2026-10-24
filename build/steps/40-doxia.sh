@@ -27,7 +27,7 @@ sed -i -e "s|^NAME=.*|NAME=\"DoxIA\"|" \
   -e "s|^PRETTY_NAME=.*|PRETTY_NAME=\"DoxIA 2 (Fedora $fedora)\"|" \
   -e "s|^VARIANT=.*|VARIANT=\"DoxIA\"|" \
   -e "s|^VARIANT_ID=.*|VARIANT_ID=doxia|" \
-  -e "s|^HOME_URL=.*|HOME_URL=\"https://github.com/alexandresebrao/doxia\"|" \
+  -e "s|^HOME_URL=.*|HOME_URL=\"https://github.com/alexandresebrao/doxia-atomic\"|" \
   /usr/lib/os-release
 grep -q '^VARIANT_ID=' /usr/lib/os-release || echo 'VARIANT_ID=doxia' >> /usr/lib/os-release
 grep -q '^VARIANT=' /usr/lib/os-release || echo 'VARIANT="DoxIA"' >> /usr/lib/os-release

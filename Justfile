@@ -20,7 +20,7 @@ qcow2: build
       --type qcow2 --rootfs btrfs --local {{image}}
 
 # The installer ISO (DoxIA wizard + Anaconda), installing the published image
-iso image="ghcr.io/alexandresebrao/doxia:latest":
+iso image="ghcr.io/alexandresebrao/doxia-atomic:latest":
     sudo bash iso/build.sh output {{image}}
 
 # Static checks: bash syntax of every script, the image lint

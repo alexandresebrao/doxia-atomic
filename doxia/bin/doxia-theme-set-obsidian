@@ -20,7 +20,7 @@ jq -r '.vaults | values[].path' ~/.config/obsidian/obsidian.json 2>/dev/null | w
   "minAppVersion": "0.16.0",
   "description": "Automatically syncs with your current DoxIA system theme colors and fonts",
   "author": "DoxIA",
-  "authorUrl": "https://github.com/alexandresebrao/doxia"
+  "authorUrl": "https://github.com/alexandresebrao/doxia-atomic"
 }
 EOF
 

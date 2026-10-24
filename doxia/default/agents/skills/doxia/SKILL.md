@@ -13,7 +13,7 @@ description: >
 
 # DoxIA Skill
 
-Manage [DoxIA](https://github.com/alexandresebrao/doxia) Linux systems - a beautiful, modern, opinionated Linux distribution. DoxIA runs it on Fedora with the mango compositor.
+Manage [DoxIA](https://github.com/alexandresebrao/doxia-atomic) Linux systems - a beautiful, modern, opinionated Linux distribution. DoxIA runs it on Fedora with the mango compositor.
 
 This skill is for end-user customization on installed systems.
 It is not for contributing to DoxIA source code.

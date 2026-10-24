@@ -1,4 +1,4 @@
-# Builds the DoxIA image and publishes it to ghcr.io/alexandresebrao/doxia,
+# Builds the DoxIA image and publishes it to ghcr.io/alexandresebrao/doxia-atomic,
 # signed with cosign. Installed machines follow :latest with bootc upgrade.
 name: build
 
@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/doxia
+  IMAGE: ghcr.io/${{ github.repository_owner }}/doxia-atomic
 
 jobs:
   build:
@@ -31,7 +31,7 @@ jobs:
         id: build
         uses: redhat-actions/buildah-build@v2
         with:
-          image: doxia
+          image: doxia-atomic
           tags: latest ${{ github.sha }} 44-${{ github.run_number }}
           containerfiles: ./Containerfile
           oci: true

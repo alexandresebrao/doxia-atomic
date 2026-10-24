@@ -8,7 +8,7 @@
 #
 #   sudo bash iso/build.sh [output dir] [image]
 #
-# image defaults to ghcr.io/alexandresebrao/doxia:latest.
+# image defaults to ghcr.io/alexandresebrao/doxia-atomic:latest.
 # Needs lorax (dnf install lorax lorax-templates-generic) and ~6 GB free.
 
 set -euo pipefail
@@ -26,7 +26,7 @@ out=$(realpath -m "${1:-$PWD/doxia-iso}")
 volid="DoxIA-$release-$arch"
 iso="$out/DoxIA-$release-$arch.iso"
 
-image=${2:-ghcr.io/alexandresebrao/doxia:latest}
+image=${2:-ghcr.io/alexandresebrao/doxia-atomic:latest}
 
 mirror=https://dl.fedoraproject.org/pub/fedora/linux
 work=$(mktemp -d "${TMPDIR:-/var/tmp}/doxia-iso.XXXXXX")
