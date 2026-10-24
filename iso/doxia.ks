@@ -11,6 +11,9 @@ cmdline
 # Without it, cmdline mode ends at "Press ENTER to quit" on tty1 and never reboots.
 # The last %post holds Anaconda until the wizard's Restart button is clicked.
 reboot --eject
+# Boot to the login screen: without it Anaconda links default.target to
+# multi-user, since greetd provides no service(graphical-login).
+xconfig --startxonboot
 
 %pre --erroronfail --log=/tmp/doxia-pre.log
 /usr/libexec/doxia-installer/doxia-installer-start
