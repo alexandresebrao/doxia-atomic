@@ -46,7 +46,10 @@ just iso          # the installer ISO (needs lorax, root)
 ```
 
 CI (`.github/workflows/build.yml`) builds every push to `main` and daily,
-publishes `ghcr.io/alexandresebrao/doxia-atomic:latest` and signs it when the
+splits the image into layers by package (`rpm-ostree compose
+build-chunked-oci`, keeping the previous `:latest`'s packing, so an upgrade
+only downloads what changed), publishes
+`ghcr.io/alexandresebrao/doxia-atomic:latest` and signs it when the
 `SIGNING_SECRET` secret holds a cosign key.
 
 ## Releases
