@@ -49,5 +49,15 @@ CI (`.github/workflows/build.yml`) builds every push to `main` and daily,
 publishes `ghcr.io/alexandresebrao/doxia-atomic:latest` and signs it when the
 `SIGNING_SECRET` secret holds a cosign key.
 
+## Releases
+
+The release is `ARG DOXIA_VERSION` in the `Containerfile` (semver,
+`0.1.0-alpha`): the image label (`bootc status`), `IMAGE_VERSION` and
+`PRETTY_NAME` in os-release ("DoxIA 2 0.1 alfa"), the wizard and the ISO name
+follow it. Alphas and betas until 1.0.0. To cut one: set the version, commit,
+`git tag v<version>` and push the tag; CI then also publishes
+`ghcr.io/alexandresebrao/doxia-atomic:<version>`. The ISO (`just iso`) goes
+on the GitHub release; it installs `:latest`, which machines follow anyway.
+
 To move a test machine onto a local build: `sudo bootc switch --transport
 containers-storage localhost/doxia`.

@@ -29,6 +29,13 @@ RUN --mount=type=cache,target=/root/.cargo/registry \
 
 FROM ghcr.io/ublue-os/base-main:${FEDORA}
 
+# The DoxIA 2 release (semver; -alpha/-beta/-rc until 1.0.0). The one place it
+# is set: the image label (bootc status), os-release (build/steps/40-doxia.sh),
+# the installer ISO (iso/build.sh) and the workflow's version tag read it here.
+ARG DOXIA_VERSION=0.1.0-alpha
+LABEL org.opencontainers.image.title="DoxIA" \
+      org.opencontainers.image.version="${DOXIA_VERSION}"
+
 COPY build /tmp/build
 COPY system /
 COPY doxia /usr/share/doxia

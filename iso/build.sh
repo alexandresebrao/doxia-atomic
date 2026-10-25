@@ -24,9 +24,18 @@ release=$(rpm -E %fedora)
 arch=$(uname -m)
 out=$(realpath -m "${1:-$PWD/doxia-iso}")
 volid="DoxIA-$release-$arch"
-iso="$out/DoxIA-$release-$arch.iso"
 
 image=${2:-ghcr.io/alexandresebrao/doxia-atomic:latest}
+
+# The DoxIA release, from the Containerfile: names the ISO and shows in the
+# wizard ("0.1.0-alpha" reads "0.1 alfa")
+version=$(sed -n 's/^ARG DOXIA_VERSION=//p' "$iso_dir/../Containerfile")
+[[ -n $version ]] || { echo "No ARG DOXIA_VERSION in the Containerfile" >&2; exit 1; }
+version_name=${version%%-*}
+version_name=${version_name%.0}
+[[ $version == *-* ]] && version_name+=" ${version#*-}"
+version_name=${version_name/alpha/alfa}
+iso="$out/DoxIA-$version-$arch.iso"
 
 mirror=https://dl.fedoraproject.org/pub/fedora/linux
 work=$(mktemp -d "${TMPDIR:-/var/tmp}/doxia-iso.XXXXXX")
@@ -46,6 +55,7 @@ lorax \
   --add-template-var "themedir=$iso_dir/anaconda" \
   --add-template-var "wizarddir=$iso_dir/wizard" \
   --add-template-var "brand=$doxia_path/default/login/brand.png" \
+  --add-template-var "version=$version_name" \
   --logfile "$out/lorax.log" --tmp "$work" \
   "$work/lorax"
 

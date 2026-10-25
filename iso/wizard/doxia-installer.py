@@ -45,7 +45,11 @@ DEFAULT_IMAGE = "ghcr.io/alexandresebrao/doxia-atomic:latest"
 DEPLOY_DIR = SYSROOT / "ostree/deploy/default/deploy"
 TASK_IFACE = "org.fedoraproject.Anaconda.Task"
 LICENSE = HERE / "LICENCA.txt"
-VERSION = os.environ.get("DOXIA_VERSION", "44")
+# The release, written next to the wizard by iso/build.sh ("2 0.1 alfa")
+try:
+    VERSION = "2 " + (HERE / "version").read_text().strip()
+except OSError:
+    VERSION = os.environ.get("DOXIA_VERSION", "2")
 
 # DoxIA is Brazilian Portuguese only: shown, locale, time zone
 LANGUAGE = ("Português (Brasil)", "pt_BR.UTF-8", "America/Sao_Paulo")

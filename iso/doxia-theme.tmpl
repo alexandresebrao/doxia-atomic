@@ -1,8 +1,8 @@
 ## lorax template file: DoxIA wizard and theme for the installer runtime (build.sh
 ## passes themedir=fedora/iso/anaconda, wizarddir=fedora/iso/wizard and the login
-## screen's brand image). Runs after runtime-install.tmpl has installed anaconda,
-## so the profile directory exists.
-<%page args="root, themedir, wizarddir, brand"/>
+## screen's brand image and the release the wizard shows). Runs after
+## runtime-install.tmpl has installed anaconda, so the profile directory exists.
+<%page args="root, themedir, wizarddir, brand, version"/>
 
 mkdir usr/libexec/doxia-installer
 runcmd install -m755 ${wizarddir}/doxia-installer-start ${wizarddir}/doxia-installer.py ${root}/usr/libexec/doxia-installer/
@@ -10,6 +10,7 @@ runcmd install -m644 ${wizarddir}/doxia-installer.css ${wizarddir}/LICENCA.txt $
 ## Manual partitioning page (blivet-gui embedded in the wizard) and its theme and icons
 runcmd cp -r ${wizarddir}/partitioner ${root}/usr/libexec/doxia-installer/
 runcmd find ${root}/usr/libexec/doxia-installer -name __pycache__ -prune -exec rm -rf {} +
+append usr/libexec/doxia-installer/version "${version}"
 
 mkdir usr/share/anaconda/pixmaps/doxia
 runcmd cp ${themedir}/doxia.css ${themedir}/sidebar-bg.png ${themedir}/sidebar-logo.png ${root}/usr/share/anaconda/pixmaps/doxia/

@@ -8,6 +8,12 @@ set -euo pipefail
 
 doxia=/usr/share/doxia
 fedora=$(rpm -E %fedora)
+# Containerfile's ARG; "0.1.0-alpha" reads "0.1 alfa"
+version=${DOXIA_VERSION:?DOXIA_VERSION comes from the Containerfile}
+version_name=${version%%-*}
+version_name=${version_name%.0}
+[[ $version == *-* ]] && version_name+=" ${version#*-}"
+version_name=${version_name/alpha/alfa}
 
 # Every doxia-* command on the PATH. The Rust apps (doxia-shell, doxia-greeter,
 # doxia-painel...) are real binaries there already and win.
@@ -24,13 +30,15 @@ echo "  system identity (boot menu, About, fastfetch)"
 # ostree titles the boot entries with PRETTY_NAME: DoxIA instead of Fedora Linux.
 # ID stays fedora so tools that check it (toolbox, dnf in containers) still work.
 sed -i -e "s|^NAME=.*|NAME=\"DoxIA\"|" \
-  -e "s|^PRETTY_NAME=.*|PRETTY_NAME=\"DoxIA 2 (Fedora $fedora)\"|" \
+  -e "s|^PRETTY_NAME=.*|PRETTY_NAME=\"DoxIA 2 $version_name (Fedora $fedora)\"|" \
   -e "s|^VARIANT=.*|VARIANT=\"DoxIA\"|" \
   -e "s|^VARIANT_ID=.*|VARIANT_ID=doxia|" \
   -e "s|^HOME_URL=.*|HOME_URL=\"https://github.com/alexandresebrao/doxia-atomic\"|" \
   /usr/lib/os-release
 grep -q '^VARIANT_ID=' /usr/lib/os-release || echo 'VARIANT_ID=doxia' >> /usr/lib/os-release
 grep -q '^VARIANT=' /usr/lib/os-release || echo 'VARIANT="DoxIA"' >> /usr/lib/os-release
+sed -i -e '/^IMAGE_ID=/d' -e '/^IMAGE_VERSION=/d' /usr/lib/os-release
+printf 'IMAGE_ID=doxia-atomic\nIMAGE_VERSION=%s\n' "$version" >> /usr/lib/os-release
 
 # The DoxIA brand as an image in terminals that draw images.
 install -d /usr/libexec/doxia
