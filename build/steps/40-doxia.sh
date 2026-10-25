@@ -60,6 +60,20 @@ install -Dm644 "$doxia/lib/mimeapps.list" /etc/xdg/mimeapps.list
 # zsh for every new account (lib/install-zsh does the rest on the first login).
 sed -i 's|^SHELL=.*|SHELL=/usr/bin/zsh|' /etc/default/useradd
 
+echo "  FortiVPN bar widget (lib/plugins/doxia.fortivpn)"
+# The root helper that alone reads and writes /etc/openfortivpn/<name>.conf; the
+# polkit rule (system/usr/share/polkit-1/rules.d) lets wheel run it, and the
+# openfortivpn@ drop-in is in system/ too.
+install -m755 "$doxia/lib/plugins/doxia.fortivpn/helper.sh" /usr/libexec/doxia-fortivpn-helper
+# Started by systemd, openfortivpn runs confined as openfortivpn_t, which may
+# not add routes or run resolvconf/resolvectl: only that domain is permissive
+# (denials are still logged), the rest of the system stays enforcing.
+cil=$(mktemp -d)/doxia-openfortivpn.cil
+echo '(typepermissive openfortivpn_t)' > "$cil"
+semodule -i "$cil"
+semodule -l | grep -qx doxia-openfortivpn
+rm -rf "${cil%/*}"
+
 echo "  login screen (greetd with doxia-greeter on mango)"
 install -Dm644 "$doxia/default/greetd/config.toml" /etc/greetd/config.toml
 install -Dm755 "$doxia/default/greetd/doxia-greeter-session" /usr/libexec/doxia-greeter-session

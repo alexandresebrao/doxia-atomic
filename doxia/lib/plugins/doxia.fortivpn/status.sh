@@ -64,7 +64,7 @@ if [[ -n $iface ]]; then
 fi
 
 helper_installed=false
-[[ -x /usr/local/libexec/doxia-fortivpn-helper ]] && helper_installed=true
+[[ -x /usr/libexec/doxia-fortivpn-helper ]] && helper_installed=true
 
 jq -cn \
   --argjson helperInstalled "$helper_installed" \

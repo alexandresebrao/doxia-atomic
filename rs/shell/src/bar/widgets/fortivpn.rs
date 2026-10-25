@@ -5,7 +5,7 @@
 // to trust, the tunnel's interface, address, peer and routes, and the
 // profiles to connect; then the list to manage them and the form to edit
 // one. Status from status.sh, connections through vpnctl.sh, profiles
-// through the root helper (pkexec, allowed by setup-system.sh's rule); the
+// through the root helper (pkexec, allowed by the image's polkit rule); the
 // password goes to it on stdin.
 
 use super::super::config::setting_str;
@@ -27,7 +27,7 @@ const PLUS: &str = "\u{F0415}";
 const PENCIL: &str = "\u{F03EB}";
 const TRASH: &str = "\u{F01B4}";
 const BACK: &str = "\u{F004D}";
-const HELPER: &str = "/usr/local/libexec/doxia-fortivpn-helper";
+const HELPER: &str = "/usr/libexec/doxia-fortivpn-helper";
 
 fn plugin_dir() -> String {
   format!("{}/lib/plugins/doxia.fortivpn", std::env::var("DOXIA_PATH").unwrap_or_default())
@@ -414,14 +414,9 @@ pub fn build(ctx: &Rc<Ctx>, entry: &Value) -> gtk::Widget {
         l.add_css_class("failed");
         l
       };
-      let setup_notice = || {
-        let c = ui::vbox(space(4.0));
-        c.append(&error_label("Falta a configuração de sistema. Rode uma vez no terminal:"));
-        let cmd = ui::text(&format!("sudo {}/setup-system.sh", plugin_dir()));
-        cmd.set_wrap_mode(pango::WrapMode::Char);
-        c.append(&cmd);
-        c
-      };
+      // The image installs the helper (build/steps/40-doxia.sh); without it the
+      // profiles can't be read or changed.
+      let setup_notice = || error_label(&format!("Falta o helper do FortiVPN ({HELPER}) no sistema."));
       let start_edit: Rc<dyn Fn(Option<Value>)> = {
         let (state, render_w) = (state.clone(), render_w.clone());
         Rc::new(move |p: Option<Value>| {

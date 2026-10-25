@@ -1,8 +1,9 @@
 #!/bin/bash
 
-# Privileged profile manager for the doxia.fortivpn plugin. setup-system.sh
-# installs a root-owned copy at /usr/local/libexec/doxia-fortivpn-helper and
-# a polkit rule so the panel can run it through pkexec without a password.
+# Privileged profile manager for the doxia.fortivpn plugin. The image installs
+# it as /usr/libexec/doxia-fortivpn-helper (build/steps/40-doxia.sh), and a
+# polkit rule (50-doxia-fortivpn.rules) lets the panel run it through pkexec
+# without a password.
 #
 #   list                    JSON array of profiles (never includes passwords)
 #   save <name> [old-name]  reads one JSON object on stdin, writes <name>.conf

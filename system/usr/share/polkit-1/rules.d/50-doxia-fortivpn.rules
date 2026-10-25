@@ -1,0 +1,17 @@
+// The FortiVPN bar widget (doxia.fortivpn): an administrator (wheel) at the
+// seat manages profiles through the root helper (/etc/openfortivpn/<name>.conf)
+// and starts/stops/restarts openfortivpn@<name>.service without a password.
+polkit.addRule(function(action, subject) {
+  if (!subject.isInGroup("wheel") || !subject.local || !subject.active) return;
+
+  if (action.id == "org.freedesktop.policykit.exec" &&
+      action.lookup("program") == "/usr/libexec/doxia-fortivpn-helper") {
+    return polkit.Result.YES;
+  }
+
+  if (action.id == "org.freedesktop.systemd1.manage-units" &&
+      /^openfortivpn@[A-Za-z0-9_-]+\.service$/.test(action.lookup("unit") || "")) {
+    var verb = action.lookup("verb");
+    if (verb == "start" || verb == "stop" || verb == "restart") return polkit.Result.YES;
+  }
+});
