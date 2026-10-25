@@ -1100,7 +1100,7 @@ class Wizard(Gtk.Window):
         lines += [
             "rootpw --lock",
             f"user --name={self.username.get_text()} --gecos={q(self.full_name.get_text().strip())} "
-            f"--groups=wheel --password={q(self.password.get_text())} --plaintext",
+            f"--groups=wheel --shell=/usr/bin/zsh --password={q(self.password.get_text())} --plaintext",
         ]
         return "\n".join(lines) + "\n"
 

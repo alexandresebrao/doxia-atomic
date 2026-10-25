@@ -6,8 +6,9 @@
 # Writes ~/.zshrc when there is none; an existing one only gets the line that
 # sources lib/zsh/doxia.zsh (PATH, nvm and SDKMAN!, greeting), saved next
 # to it first, and keeps its theme and plugins. The zsh package and making it the
-# login shell are install-system.sh's (root) and update.sh's. Run as the user by
-# install-user.sh and fedora/update.sh.
+# login shell are the image's (build/steps/20-packages.sh, /etc/default/useradd
+# in build/steps/40-doxia.sh, --shell in the installer's kickstart). Run as the
+# user by lib/setup-user.
 
 set -euo pipefail
 
